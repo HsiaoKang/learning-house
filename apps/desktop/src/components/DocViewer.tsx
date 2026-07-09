@@ -7,8 +7,11 @@
  * @author yuchenxi
  */
 import { useEffect, useState } from "react";
+import { Button, EmptyState, IconButton, Tabs } from "@learning-house/ui";
 import { mediaSrc, readBinary } from "../lib/platform";
 import type { LessonResource } from "../types";
+import { panelTitle, panelToolbar } from "../styles/layout.css";
+import { scoreViewer, zoomGroup, zoomLabel } from "./docviewer.css";
 import { ImageScore } from "./ImageScore";
 import { PdfScore } from "./PdfScore";
 import { AlphaTabScore } from "./AlphaTabScore";
@@ -62,47 +65,40 @@ export function DocViewer({ resources }: DocViewerProps) {
   }, [active]);
 
   if (!active) {
-    return (
-      <div className="panel-empty">
-        <div className="panel-empty-icon">♪</div>
-        <p>本课节没有文档资源</p>
-        <p className="panel-empty-hint">支持图片 / PDF / Guitar Pro（gp3-gpx）</p>
-      </div>
-    );
+    return <EmptyState icon="music" title="本课节没有文档资源" hint="支持图片 / PDF / Guitar Pro（gp3-gpx）" />;
   }
 
   return (
-    <div className="score-viewer">
-      <div className="panel-toolbar">
+    <div className={scoreViewer}>
+      <div className={panelToolbar}>
         {resources.length > 1 ? (
-          <div className="resource-tabs">
-            {resources.map((res, i) => (
-              <button
-                key={res.path}
-                className={`resource-tab ${i === activeIndex ? "active" : ""}`}
-                title={res.name}
-                onClick={() => setActiveIndex(i)}
-              >
-                {res.name}
-              </button>
-            ))}
-          </div>
+          <Tabs
+            items={resources.map((res) => ({ key: res.path, label: res.name }))}
+            activeKey={active.path}
+            onChange={(key) => setActiveIndex(resources.findIndex((r) => r.path === key))}
+          />
         ) : (
-          <span className="panel-title" title={active.name}>
+          <span className={panelTitle} title={active.name}>
             {active.name}
           </span>
         )}
-        <div className="zoom-group">
-          <button className="btn btn-ghost" onClick={() => setZoom((z) => Math.max(ZOOM_MIN, +(z - ZOOM_STEP).toFixed(2)))}>
-            −
-          </button>
-          <span className="zoom-label">{Math.round(zoom * 100)}%</span>
-          <button className="btn btn-ghost" onClick={() => setZoom((z) => Math.min(ZOOM_MAX, +(z + ZOOM_STEP).toFixed(2)))}>
-            +
-          </button>
-          <button className="btn btn-ghost" onClick={() => setZoom(1)}>
+        <div className={zoomGroup}>
+          <IconButton
+            name="minus"
+            label="缩小"
+            size="sm"
+            onClick={() => setZoom((z) => Math.max(ZOOM_MIN, +(z - ZOOM_STEP).toFixed(2)))}
+          />
+          <span className={zoomLabel}>{Math.round(zoom * 100)}%</span>
+          <IconButton
+            name="plus"
+            label="放大"
+            size="sm"
+            onClick={() => setZoom((z) => Math.min(ZOOM_MAX, +(z + ZOOM_STEP).toFixed(2)))}
+          />
+          <Button variant="ghost" size="sm" onClick={() => setZoom(1)}>
             适宽
-          </button>
+          </Button>
         </div>
       </div>
       {renderBody(active, zoom, binary, loadError)}
@@ -120,13 +116,13 @@ export function DocViewer({ resources }: DocViewerProps) {
  */
 function renderBody(doc: LessonResource, zoom: number, binary: Uint8Array | null, loadError: string | null) {
   if (loadError) {
-    return <div className="panel-empty">文件读取失败：{loadError}</div>;
+    return <EmptyState title={`文件读取失败：${loadError}`} />;
   }
   if (doc.kind === "image") {
     return <ImageScore src={mediaSrc(doc.path)} zoom={zoom} />;
   }
   if (!binary) {
-    return <div className="panel-empty">加载中…</div>;
+    return <EmptyState title="加载中…" />;
   }
   if (doc.kind === "pdf") {
     return <PdfScore data={binary} zoom={zoom} />;

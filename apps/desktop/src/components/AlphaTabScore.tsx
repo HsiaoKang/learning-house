@@ -8,7 +8,9 @@
  * @author yuchenxi
  */
 import { useEffect, useRef, useState } from "react";
+import { EmptyState } from "@learning-house/ui";
 import * as alphaTabLib from "@coderline/alphatab";
+import { alphaTabHost, scoreScroll } from "./docviewer.css";
 
 interface AlphaTabScoreProps {
   /** Guitar Pro 文件二进制内容 */
@@ -71,10 +73,10 @@ export function AlphaTabScore({ data, zoom }: AlphaTabScoreProps) {
   }, [zoom]);
 
   if (error) {
-    return <div className="panel-empty">Guitar Pro 谱加载失败:{error}</div>;
+    return <EmptyState title={`Guitar Pro 谱加载失败：${error}`} />;
   }
   return (
-    <div className="score-scroll alphatab-host">
+    <div className={`${scoreScroll} ${alphaTabHost}`}>
       <div ref={hostRef} />
     </div>
   );

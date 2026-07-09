@@ -1,15 +1,26 @@
 /**
  * 节拍器控制条
  *
- * 底部固定条，提供：启停、Tap 测速、BPM 调节、拍号、重音、
- * 音量、视频联动开关与首拍偏移设置、拍点指示灯。
+ * 工具栏内的节拍器面板：启停、Tap 测速浮窗、BPM 调节、拍号、
+ * 重音、音量、媒体联动开关与首拍偏移设置、拍点指示灯。
  *
  * @author yuchenxi
  */
 import { useState } from "react";
+import { Button, Checkbox, Select, Slider } from "@learning-house/ui";
 import type { MetronomeOptions } from "@learning-house/metronome-core";
 import type { SyncConfig, SyncSource } from "../hooks/useMetronome";
 import { TapTempoModal } from "./TapTempoModal";
+import {
+  beatDot,
+  beatLights,
+  bpmInput,
+  metroGroup,
+  metroLabel,
+  metronomeBar,
+  metroToggle,
+  offsetInput,
+} from "./metronome.css";
 
 /** 可选拍号（每小节拍数） */
 const BEATS_OPTIONS = [2, 3, 4, 6];
@@ -47,37 +58,48 @@ export function MetronomeBar(props: MetronomeBarProps) {
     if (time !== null) setSync({ firstBeatOffset: +time.toFixed(2) });
   };
 
+  /**
+   * 计算拍点灯的命中状态标记
+   *
+   * @param index 灯序号
+   * @returns "accent" 重拍 / "true" 普通拍 / undefined 未命中
+   */
+  const hitStateOf = (index: number): "accent" | "true" | undefined => {
+    if (index !== activeBeat) return undefined;
+    return index === 0 && options.accentFirstBeat ? "accent" : "true";
+  };
+
   return (
-    <div className="metronome-bar">
-      <button className={`btn btn-metro ${running ? "running" : ""}`} onClick={toggle} title="启动/停止节拍器（自由模式）">
-        {running ? "■ 停止" : "▶ 节拍"}
-      </button>
-      <button className="btn btn-ghost" onClick={() => setTapOpen(true)} title="打开 Tap Tempo 浮窗测速">
+    <div className={metronomeBar}>
+      <Button
+        className={metroToggle}
+        icon={running ? "stop" : "play"}
+        active={running}
+        onClick={toggle}
+        title="启动/停止节拍器（自由模式）"
+      >
+        {running ? "停止" : "节拍"}
+      </Button>
+      <Button variant="ghost" onClick={() => setTapOpen(true)} title="打开 Tap Tempo 浮窗测速">
         TAP
-      </button>
+      </Button>
       <TapTempoModal open={tapOpen} onClose={() => setTapOpen(false)} onApply={(bpm) => updateOptions({ bpm })} />
 
-      <div className="metro-group bpm-group">
+      <div className={metroGroup}>
+        <Slider min={20} max={300} value={options.bpm} onChange={(bpm) => updateOptions({ bpm })} aria-label="BPM" />
         <input
-          type="range"
-          min={20}
-          max={300}
-          value={options.bpm}
-          onChange={(e) => updateOptions({ bpm: Number(e.target.value) })}
-        />
-        <input
-          className="bpm-input"
+          className={bpmInput}
           type="number"
           min={20}
           max={300}
           value={options.bpm}
           onChange={(e) => updateOptions({ bpm: Math.min(300, Math.max(20, Number(e.target.value) || 20)) })}
         />
-        <span className="metro-label">BPM</span>
+        <span className={metroLabel}>BPM</span>
       </div>
 
-      <div className="metro-group">
-        <select
+      <div className={metroGroup}>
+        <Select
           value={options.beatsPerBar}
           onChange={(e) => updateOptions({ beatsPerBar: Number(e.target.value) })}
           title="拍号（每小节拍数）"
@@ -87,32 +109,30 @@ export function MetronomeBar(props: MetronomeBarProps) {
               {n}/4
             </option>
           ))}
-        </select>
-        <label className="metro-check">
-          <input
-            type="checkbox"
-            checked={options.accentFirstBeat}
-            onChange={(e) => updateOptions({ accentFirstBeat: e.target.checked })}
-          />
-          重音
-        </label>
+        </Select>
+        <Checkbox
+          checked={options.accentFirstBeat}
+          onChange={(accentFirstBeat) => updateOptions({ accentFirstBeat })}
+          label="重音"
+        />
       </div>
 
-      <div className="metro-group">
-        <span className="metro-label">音量</span>
-        <input
-          type="range"
+      <div className={metroGroup}>
+        <span className={metroLabel}>音量</span>
+        <Slider
           min={0}
           max={1}
           step={0.05}
           value={options.volume}
-          onChange={(e) => updateOptions({ volume: Number(e.target.value) })}
+          onChange={(volume) => updateOptions({ volume })}
+          width="90px"
+          aria-label="节拍器音量"
         />
       </div>
 
-      <div className={`metro-group sync-group ${hasVideo || hasAudio ? "" : "disabled"}`}>
-        <span className="metro-label">联动</span>
-        <select
+      <div className={metroGroup} data-disabled={!hasVideo && !hasAudio ? "true" : undefined}>
+        <span className={metroLabel}>联动</span>
+        <Select
           value={sync.source}
           disabled={!hasVideo && !hasAudio}
           onChange={(e) => setSync({ source: e.target.value as SyncSource })}
@@ -123,14 +143,14 @@ export function MetronomeBar(props: MetronomeBarProps) {
             跟随视频
           </option>
           <option value="audio" disabled={!hasAudio}>
-            跟随伴奏
+            跟随音频
           </option>
-        </select>
+        </Select>
         {sync.source !== "none" && (
           <>
-            <span className="metro-label">首拍</span>
+            <span className={metroLabel}>首拍</span>
             <input
-              className="bpm-input offset-input"
+              className={`${bpmInput} ${offsetInput}`}
               type="number"
               min={0}
               step={0.1}
@@ -138,19 +158,16 @@ export function MetronomeBar(props: MetronomeBarProps) {
               onChange={(e) => setSync({ firstBeatOffset: Math.max(0, Number(e.target.value) || 0) })}
               title="媒体里第一拍出现的秒数"
             />
-            <button className="btn btn-ghost" onClick={captureOffsetFromMedia} title="把当前播放位置设为第一拍">
+            <Button variant="ghost" size="sm" onClick={captureOffsetFromMedia} title="把当前播放位置设为第一拍">
               取当前
-            </button>
+            </Button>
           </>
         )}
       </div>
 
-      <div className="beat-lights">
+      <div className={beatLights}>
         {Array.from({ length: options.beatsPerBar }, (_, i) => (
-          <span
-            key={i}
-            className={`beat-dot ${i === activeBeat ? (i === 0 && options.accentFirstBeat ? "hit accent" : "hit") : ""}`}
-          />
+          <span key={i} className={beatDot} data-hit={hitStateOf(i)} />
         ))}
       </div>
     </div>

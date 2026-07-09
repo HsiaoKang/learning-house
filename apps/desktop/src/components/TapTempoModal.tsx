@@ -8,6 +8,8 @@
  * @author yuchenxi
  */
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Button, Modal } from "@learning-house/ui";
+import { bpmDisplay, bpmHint, bpmUnit, bpmValue, tapActions, tapCount, tapFooter, tapPad } from "./tap.css";
 
 /** 判定重新计数的静默间隔（毫秒） */
 const RESET_GAP_MS = 2000;
@@ -31,7 +33,7 @@ interface TapTempoModalProps {
 export function TapTempoModal({ open, onClose, onApply }: TapTempoModalProps) {
   const tapsRef = useRef<number[]>([]);
   const [bpm, setBpm] = useState<number | null>(null);
-  const [tapCount, setTapCount] = useState(0);
+  const [taps, setTaps] = useState(0);
   const [flash, setFlash] = useState(false);
 
   /**
@@ -39,15 +41,15 @@ export function TapTempoModal({ open, onClose, onApply }: TapTempoModalProps) {
    */
   const tap = useCallback(() => {
     const now = performance.now();
-    const taps = tapsRef.current;
-    if (taps.length > 0 && now - taps[taps.length - 1] > RESET_GAP_MS) {
-      taps.length = 0;
+    const list = tapsRef.current;
+    if (list.length > 0 && now - list[list.length - 1] > RESET_GAP_MS) {
+      list.length = 0;
     }
-    taps.push(now);
-    if (taps.length > MAX_TAPS) taps.shift();
-    setTapCount(taps.length);
-    if (taps.length >= 2) {
-      const avgMs = (taps[taps.length - 1] - taps[0]) / (taps.length - 1);
+    list.push(now);
+    if (list.length > MAX_TAPS) list.shift();
+    setTaps(list.length);
+    if (list.length >= 2) {
+      const avgMs = (list[list.length - 1] - list[0]) / (list.length - 1);
       setBpm(Math.round(Math.min(300, Math.max(20, 60000 / avgMs))));
     }
     // 击打视觉反馈
@@ -61,7 +63,7 @@ export function TapTempoModal({ open, onClose, onApply }: TapTempoModalProps) {
   const reset = useCallback(() => {
     tapsRef.current = [];
     setBpm(null);
-    setTapCount(0);
+    setTaps(0);
   }, []);
 
   // 浮窗打开期间监听空格键打拍、Esc 关闭；关闭时清空记录
@@ -82,54 +84,43 @@ export function TapTempoModal({ open, onClose, onApply }: TapTempoModalProps) {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [open, tap, reset, onClose]);
 
-  if (!open) return null;
-
   return (
-    <div className="modal-mask" onClick={onClose}>
-      <div className="tap-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="tap-modal-header">
-          <span>Tap Tempo</span>
-          <button className="btn btn-ghost" onClick={onClose}>
-            ✕
-          </button>
-        </div>
+    <Modal open={open} onClose={onClose} title="Tap Tempo">
+      <div className={bpmDisplay}>
+        {bpm !== null ? (
+          <>
+            <span className={bpmValue}>{bpm}</span>
+            <span className={bpmUnit}>BPM</span>
+          </>
+        ) : (
+          <span className={bpmHint}>连续击打测速</span>
+        )}
+      </div>
 
-        <div className="tap-bpm-display">
-          {bpm !== null ? (
-            <>
-              <span className="tap-bpm-value">{bpm}</span>
-              <span className="tap-bpm-unit">BPM</span>
-            </>
-          ) : (
-            <span className="tap-bpm-hint">连续击打测速</span>
-          )}
-        </div>
+      <button className={tapPad} data-flash={flash ? "true" : undefined} onClick={tap}>
+        点击 或 敲空格
+      </button>
 
-        <button className={`tap-pad ${flash ? "flash" : ""}`} onClick={tap}>
-          点击 或 敲空格
-        </button>
-
-        <div className="tap-modal-footer">
-          <span className="tap-count">{tapCount > 0 ? `已击打 ${tapCount} 次` : "\u00a0"}</span>
-          <div className="tap-actions">
-            <button className="btn btn-ghost" onClick={reset}>
-              重来
-            </button>
-            <button
-              className="btn btn-primary"
-              disabled={bpm === null}
-              onClick={() => {
-                if (bpm !== null) {
-                  onApply(bpm);
-                  onClose();
-                }
-              }}
-            >
-              应用到节拍器
-            </button>
-          </div>
+      <div className={tapFooter}>
+        <span className={tapCount}>{taps > 0 ? `已击打 ${taps} 次` : "\u00a0"}</span>
+        <div className={tapActions}>
+          <Button variant="ghost" onClick={reset}>
+            重来
+          </Button>
+          <Button
+            variant="primary"
+            disabled={bpm === null}
+            onClick={() => {
+              if (bpm !== null) {
+                onApply(bpm);
+                onClose();
+              }
+            }}
+          >
+            应用到节拍器
+          </Button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }

@@ -6,6 +6,7 @@
  *
  * @author yuchenxi
  */
+import { scoreImage, scoreScroll } from "./docviewer.css";
 
 interface ImageScoreProps {
   /** asset 协议图片 URL */
@@ -21,8 +22,8 @@ interface ImageScoreProps {
  */
 export function ImageScore({ src, zoom }: ImageScoreProps) {
   return (
-    <div className="score-scroll">
-      <img className="score-image" src={src} style={{ width: `${zoom * 100}%` }} alt="乐谱" />
+    <div className={scoreScroll}>
+      <img className={scoreImage} src={src} style={{ width: `${zoom * 100}%` }} alt="乐谱" />
     </div>
   );
 }

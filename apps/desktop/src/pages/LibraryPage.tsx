@@ -7,7 +7,24 @@
  * @author yuchenxi
  */
 import { useState } from "react";
+import { BrandLogo, Button, EmptyState, IconButton, Modal, ProgressBar } from "@learning-house/ui";
 import { COURSE_TYPE_LABELS, type Course, type CourseType } from "../types";
+import { brand, brandName, topBar } from "../styles/layout.css";
+import {
+  courseCard,
+  courseCardActions,
+  courseCardHead,
+  courseGrid,
+  courseMeta,
+  courseName,
+  courseProgressLabel,
+  courseTypeTag,
+  importActions,
+  importHint,
+  importTypeBtn,
+  libraryBody,
+} from "./library.css";
+import { appShell } from "../styles/layout.css";
 
 interface LibraryPageProps {
   courses: Course[];
@@ -19,6 +36,8 @@ interface LibraryPageProps {
   onRescanCourse: (id: string) => void;
   /** 删除课程（仅移出课程库，不动磁盘文件） */
   onDeleteCourse: (id: string) => void;
+  /** 主题切换按钮（由 App 注入，含图标与行为） */
+  themeToggle: React.ReactNode;
 }
 
 /**
@@ -39,67 +58,70 @@ function progressOf(course: Course): { done: number; total: number } {
  * @param props 见 LibraryPageProps 字段说明
  */
 export function LibraryPage(props: LibraryPageProps) {
-  const { courses, onOpenCourse, onImportFolder, onRescanCourse, onDeleteCourse } = props;
+  const { courses, onOpenCourse, onImportFolder, onRescanCourse, onDeleteCourse, themeToggle } = props;
   const [importOpen, setImportOpen] = useState(false);
 
   return (
-    <div className="library-page">
-      <header className="top-bar">
-        <div className="brand">
-          <span className="brand-mark">📚</span>
-          <span className="brand-name">Learning House</span>
+    <div className={appShell}>
+      <header className={topBar}>
+        <div className={brand}>
+          <BrandLogo />
+          <span className={brandName}>Learning House</span>
         </div>
-        <button className="btn btn-primary" onClick={() => setImportOpen(true)}>
-          + 导入课程文件夹
-        </button>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          {themeToggle}
+          <Button variant="primary" icon="plus" onClick={() => setImportOpen(true)}>
+            导入课程文件夹
+          </Button>
+        </div>
       </header>
 
-      <main className="library-body">
+      <main className={libraryBody}>
         {courses.length === 0 ? (
-          <div className="panel-empty library-empty">
-            <div className="panel-empty-icon">📚</div>
-            <p>还没有课程</p>
-            <button className="btn btn-primary" onClick={() => setImportOpen(true)}>
+          <EmptyState
+            icon="folderOpen"
+            title="还没有课程"
+            hint="选择一个文件夹，其中的每个子文件夹会自动归纳为一节课"
+          >
+            <Button variant="primary" onClick={() => setImportOpen(true)}>
               导入课程文件夹
-            </button>
-            <p className="panel-empty-hint">选择一个文件夹，其中的每个子文件夹会自动归纳为一节课</p>
-          </div>
+            </Button>
+          </EmptyState>
         ) : (
-          <div className="course-grid">
+          <div className={courseGrid}>
             {courses.map((course) => {
               const { done, total } = progressOf(course);
               const percent = total > 0 ? Math.round((done / total) * 100) : 0;
               return (
-                <div key={course.id} className="course-card" onClick={() => onOpenCourse(course.id)}>
-                  <div className="course-card-head">
-                    <span className="course-name" title={course.name}>
+                <div key={course.id} className={courseCard} onClick={() => onOpenCourse(course.id)}>
+                  <div className={courseCardHead}>
+                    <span className={courseName} title={course.name}>
                       {course.name}
                     </span>
-                    <span className="course-type-tag">{COURSE_TYPE_LABELS[course.type]}</span>
+                    <span className={courseTypeTag}>{COURSE_TYPE_LABELS[course.type]}</span>
                   </div>
-                  <div className="course-meta">
+                  <div className={courseMeta}>
                     {total} 课节 · 已完成 {done} 节
                   </div>
-                  <div className="course-progress">
-                    <div className="course-progress-fill" style={{ width: `${percent}%` }} />
-                  </div>
-                  <div className="course-progress-label">{percent}%</div>
-                  <div className="course-card-actions" onClick={(e) => e.stopPropagation()}>
+                  <ProgressBar percent={percent} />
+                  <div className={courseProgressLabel}>{percent}%</div>
+                  <div className={courseCardActions} onClick={(e) => e.stopPropagation()}>
                     {course.rootDir && (
-                      <button className="btn btn-ghost" onClick={() => onRescanCourse(course.id)} title="按文件夹重新扫描课节">
-                        重新扫描
-                      </button>
+                      <IconButton
+                        name="rescan"
+                        label="按文件夹重新扫描课节"
+                        onClick={() => onRescanCourse(course.id)}
+                      />
                     )}
-                    <button
-                      className="btn btn-ghost btn-danger"
+                    <IconButton
+                      name="trash"
+                      label="删除课程"
                       onClick={() => {
                         if (confirm(`确认从课程库删除「${course.name}」？磁盘文件不会被删除。`)) {
                           onDeleteCourse(course.id);
                         }
                       }}
-                    >
-                      删除
-                    </button>
+                    />
                   </div>
                 </div>
               );
@@ -108,33 +130,24 @@ export function LibraryPage(props: LibraryPageProps) {
         )}
       </main>
 
-      {importOpen && (
-        <div className="modal-mask" onClick={() => setImportOpen(false)}>
-          <div className="import-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="tap-modal-header">
-              <span>导入课程</span>
-              <button className="btn btn-ghost" onClick={() => setImportOpen(false)}>
-                ✕
-              </button>
-            </div>
-            <p className="import-hint">选择课程类型后挑选课程根文件夹，子文件夹将自动归纳为课节。</p>
-            <div className="import-actions">
-              {(Object.keys(COURSE_TYPE_LABELS) as CourseType[]).map((type) => (
-                <button
-                  key={type}
-                  className="btn btn-primary import-type-btn"
-                  onClick={() => {
-                    setImportOpen(false);
-                    onImportFolder(type);
-                  }}
-                >
-                  {COURSE_TYPE_LABELS[type]}课程
-                </button>
-              ))}
-            </div>
-          </div>
+      <Modal open={importOpen} onClose={() => setImportOpen(false)} title="导入课程" width="360px">
+        <p className={importHint}>选择课程类型后挑选课程根文件夹，子文件夹将自动归纳为课节。</p>
+        <div className={importActions}>
+          {(Object.keys(COURSE_TYPE_LABELS) as CourseType[]).map((type) => (
+            <Button
+              key={type}
+              variant="primary"
+              className={importTypeBtn}
+              onClick={() => {
+                setImportOpen(false);
+                onImportFolder(type);
+              }}
+            >
+              {COURSE_TYPE_LABELS[type]}课程
+            </Button>
+          ))}
         </div>
-      )}
+      </Modal>
     </div>
   );
 }

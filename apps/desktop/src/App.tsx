@@ -1,12 +1,14 @@
 /**
  * Learning House 应用根组件
  *
- * 负责视图路由（课程库 / 上课页）、课程库与设置的加载持久化。
+ * 负责视图路由（课程库 / 上课页）、课程库与设置的加载持久化、
+ * 主题 class 挂载与切换。
  *
  * @author yuchenxi
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
+import { darkThemeClass, IconButton, lightThemeClass } from "@learning-house/ui";
 import { LibraryPage } from "./pages/LibraryPage";
 import { ClassroomPage } from "./pages/ClassroomPage";
 import { scanCourseFolder } from "./lib/scanner";
@@ -21,7 +23,13 @@ import {
   type PlaybackPositions,
 } from "./lib/storage";
 import type { AppSettings, Course, CourseType } from "./types";
-import "./App.css";
+import { appLoading } from "./styles/layout.css";
+
+/** 主题标识到 vanilla-extract 主题 class 的映射 */
+const THEME_CLASSES: Record<AppSettings["theme"], string> = {
+  dark: darkThemeClass,
+  light: lightThemeClass,
+};
 
 function App() {
   const [courses, setCourses] = useState<Course[]>([]);
@@ -35,12 +43,20 @@ function App() {
     void Promise.all([loadCourses(), loadSettings(), loadPlaybackPositions()]).then(
       ([storedCourses, storedSettings, positions]) => {
         setCourses(storedCourses);
-        setSettings(storedSettings);
+        // 旧版本设置缺省字段用默认值补齐
+        setSettings({ ...DEFAULT_SETTINGS, ...storedSettings });
         positionsRef.current = positions;
         setLoaded(true);
       },
     );
   }, []);
+
+  // 关键节点：把当前主题 class 挂到根元素，token 变量随之切换
+  useEffect(() => {
+    const el = document.documentElement;
+    el.classList.remove(...Object.values(THEME_CLASSES));
+    el.classList.add(THEME_CLASSES[settings.theme]);
+  }, [settings.theme]);
 
   /**
    * 更新课程库并持久化
@@ -157,8 +173,17 @@ function App() {
   }, []);
 
   if (!loaded) {
-    return <div className="app-loading">加载中…</div>;
+    return <div className={appLoading}>加载中…</div>;
   }
+
+  // 主题切换按钮：两个页面顶栏共用
+  const themeToggle = (
+    <IconButton
+      name={settings.theme === "dark" ? "sun" : "moon"}
+      label={settings.theme === "dark" ? "切换为亮色主题" : "切换为暗色主题"}
+      onClick={() => updateSettings({ theme: settings.theme === "dark" ? "light" : "dark" })}
+    />
+  );
 
   const activeCourse = courses.find((c) => c.id === activeCourseId) ?? null;
 
@@ -172,6 +197,7 @@ function App() {
         onSettingsChange={updateSettings}
         playbackPositions={positionsRef.current}
         onSavePosition={savePosition}
+        themeToggle={themeToggle}
       />
     );
   }
@@ -183,6 +209,7 @@ function App() {
       onImportFolder={(type) => void importFolder(type)}
       onRescanCourse={(id) => void rescanCourse(id)}
       onDeleteCourse={deleteCourse}
+      themeToggle={themeToggle}
     />
   );
 }

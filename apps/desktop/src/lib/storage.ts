@@ -20,7 +20,7 @@ const KEY_SETTINGS = "settings";
 const KEY_PLAYBACK = "playbackPositions";
 
 /** 默认设置 */
-export const DEFAULT_SETTINGS: AppSettings = { swapPanes: false };
+export const DEFAULT_SETTINGS: AppSettings = { swapPanes: false, theme: "dark" };
 
 /** 视频续播位置表：resourcePath -> 秒 */
 export type PlaybackPositions = Record<string, number>;

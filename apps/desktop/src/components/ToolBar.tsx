@@ -6,10 +6,12 @@
  *
  * @author yuchenxi
  */
+import { Select } from "@learning-house/ui";
 import type { MetronomeOptions } from "@learning-house/metronome-core";
 import type { SyncConfig } from "../hooks/useMetronome";
 import type { ToolKind } from "../types";
 import { MetronomeBar } from "./MetronomeBar";
+import { toolBar, toolEmptyHint, toolLabel, toolPanel, toolSwitcher } from "./toolbar.css";
 
 /** 工具显示名 */
 const TOOL_LABELS: Record<ToolKind, string> = {
@@ -44,18 +46,18 @@ interface ToolBarProps {
  */
 export function ToolBar({ tool, onToolChange, metronome }: ToolBarProps) {
   return (
-    <div className="tool-bar">
-      <div className="tool-switcher">
-        <span className="metro-label">工具</span>
-        <select value={tool} onChange={(e) => onToolChange(e.target.value as ToolKind)}>
+    <div className={toolBar}>
+      <div className={toolSwitcher}>
+        <span className={toolLabel}>工具</span>
+        <Select value={tool} onChange={(e) => onToolChange(e.target.value as ToolKind)}>
           {(Object.keys(TOOL_LABELS) as ToolKind[]).map((kind) => (
             <option key={kind} value={kind}>
               {TOOL_LABELS[kind]}
             </option>
           ))}
-        </select>
+        </Select>
       </div>
-      <div className="tool-panel">
+      <div className={toolPanel}>
         {tool === "metronome" ? (
           <MetronomeBar
             options={metronome.options}
@@ -70,7 +72,7 @@ export function ToolBar({ tool, onToolChange, metronome }: ToolBarProps) {
             getMediaTime={metronome.getMediaTime}
           />
         ) : (
-          <span className="tool-empty-hint">未启用工具</span>
+          <span className={toolEmptyHint}>未启用工具</span>
         )}
       </div>
     </div>

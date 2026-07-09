@@ -8,12 +8,14 @@
  * @author yuchenxi
  */
 import { useEffect, useRef, useState, type RefObject } from "react";
+import { EmptyState, Tabs } from "@learning-house/ui";
 import { mediaSrc } from "../lib/platform";
 import type { MediaEngineControl } from "../hooks/useMetronome";
 import type { LessonResource } from "../types";
+import { panelTitle, panelToolbar } from "../styles/layout.css";
+import { videoEl, videoPlayer, videoStage } from "./videoplayer.css";
+import { RateGroup } from "./RateGroup";
 
-/** 可选倍速档位（慢速练习是核心场景） */
-const PLAYBACK_RATES = [0.5, 0.65, 0.75, 0.85, 1, 1.25, 1.5];
 /** 续播位置保存节流间隔（毫秒） */
 const POSITION_SAVE_INTERVAL_MS = 3000;
 
@@ -98,51 +100,30 @@ export function VideoPlayer(props: VideoPlayerProps) {
   };
 
   if (!active) {
-    return (
-      <div className="panel-empty">
-        <div className="panel-empty-icon">▶</div>
-        <p>本课节没有视频资源</p>
-      </div>
-    );
+    return <EmptyState icon="video" title="本课节没有视频资源" />;
   }
 
   return (
-    <div className="video-player">
-      <div className="panel-toolbar">
+    <div className={videoPlayer}>
+      <div className={panelToolbar}>
         {resources.length > 1 ? (
-          <div className="resource-tabs">
-            {resources.map((res, i) => (
-              <button
-                key={res.path}
-                className={`resource-tab ${i === activeIndex ? "active" : ""}`}
-                title={res.name}
-                onClick={() => setActiveIndex(i)}
-              >
-                {res.name}
-              </button>
-            ))}
-          </div>
+          <Tabs
+            items={resources.map((res) => ({ key: res.path, label: res.name }))}
+            activeKey={active.path}
+            onChange={(key) => setActiveIndex(resources.findIndex((r) => r.path === key))}
+          />
         ) : (
-          <span className="panel-title" title={active.name}>
+          <span className={panelTitle} title={active.name}>
             {active.name}
           </span>
         )}
-        <div className="rate-group">
-          {PLAYBACK_RATES.map((rate) => (
-            <button
-              key={rate}
-              className={`rate-btn ${rate === playbackRate ? "active" : ""}`}
-              onClick={() => changeRate(rate)}
-            >
-              {rate}x
-            </button>
-          ))}
-        </div>
+        <RateGroup value={playbackRate} onChange={changeRate} />
       </div>
-      <div className="video-stage">
+      <div className={videoStage}>
         <video
           key={active.path}
           ref={videoRef}
+          className={videoEl}
           src={mediaSrc(active.path)}
           controls
           playsInline

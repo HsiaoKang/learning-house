@@ -6,6 +6,7 @@
  * @author yuchenxi
  */
 import { useCallback, useRef, useState, type ReactNode } from "react";
+import { splitDivider, splitLeft, splitPane, splitRight } from "./splitpane.css";
 
 interface SplitPaneProps {
   left: ReactNode;
@@ -44,12 +45,12 @@ export function SplitPane({ left, right, initialRatio = 0.55 }: SplitPaneProps) 
   }, []);
 
   return (
-    <div className="split-pane" ref={containerRef}>
-      <div className="split-left" style={{ flexBasis: `${ratio * 100}%` }}>
+    <div className={splitPane} ref={containerRef}>
+      <div className={splitLeft} style={{ flexBasis: `${ratio * 100}%` }}>
         {left}
       </div>
-      <div className="split-divider" onPointerDown={onDividerPointerDown} />
-      <div className="split-right">{right}</div>
+      <div className={splitDivider} onPointerDown={onDividerPointerDown} />
+      <div className={splitRight}>{right}</div>
     </div>
   );
 }

@@ -7,10 +7,12 @@
  * @author yuchenxi
  */
 import { useEffect, useRef, useState } from "react";
+import { EmptyState } from "@learning-house/ui";
 // legacy 构建兼容较旧的 WebView 内核（标准构建依赖过新的 JS API）
 import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
 import type { PDFDocumentLoadingTask, PDFDocumentProxy } from "pdfjs-dist";
 import pdfWorkerUrl from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
+import { pdfPageCanvas, pdfPages, scoreScroll } from "./docviewer.css";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
@@ -65,9 +67,9 @@ export function PdfScore({ data, zoom }: PdfScoreProps) {
   }, [doc, zoom]);
 
   if (error) {
-    return <div className="panel-empty">PDF 加载失败：{error}</div>;
+    return <EmptyState title={`PDF 加载失败：${error}`} />;
   }
-  return <div className="score-scroll pdf-pages" ref={containerRef} />;
+  return <div className={`${scoreScroll} ${pdfPages}`} ref={containerRef} />;
 }
 
 /**
@@ -96,7 +98,7 @@ async function renderAllPages(
     const viewport = page.getViewport({ scale: cssScale * dpr });
 
     const canvas = document.createElement("canvas");
-    canvas.className = "pdf-page-canvas";
+    canvas.className = pdfPageCanvas;
     canvas.width = Math.floor(viewport.width);
     canvas.height = Math.floor(viewport.height);
     canvas.style.width = `${Math.floor(viewport.width / dpr)}px`;

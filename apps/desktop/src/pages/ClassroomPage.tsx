@@ -7,6 +7,7 @@
  * @author yuchenxi
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Button, Checkbox, EmptyState, IconButton, Select } from "@learning-house/ui";
 import { SplitPane } from "../components/SplitPane";
 import { VideoPlayer } from "../components/VideoPlayer";
 import { AudioPlayerBar } from "../components/AudioPlayerBar";
@@ -21,6 +22,8 @@ import {
   type ToolKind,
 } from "../types";
 import type { PlaybackPositions } from "../lib/storage";
+import { appShell, mainArea, panelTitle, topBar } from "../styles/layout.css";
+import { classroomLeft, classroomRight, courseTitle, lessonSwitcher } from "./classroom.css";
 
 interface ClassroomPageProps {
   course: Course;
@@ -36,6 +39,8 @@ interface ClassroomPageProps {
   playbackPositions: PlaybackPositions;
   /** 持久化某资源的续播位置 */
   onSavePosition: (path: string, position: number) => void;
+  /** 主题切换按钮（由 App 注入） */
+  themeToggle: React.ReactNode;
 }
 
 /**
@@ -44,7 +49,16 @@ interface ClassroomPageProps {
  * @param props 见 ClassroomPageProps 字段说明
  */
 export function ClassroomPage(props: ClassroomPageProps) {
-  const { course, onBack, onLessonCompletedChange, settings, onSettingsChange, playbackPositions, onSavePosition } = props;
+  const {
+    course,
+    onBack,
+    onLessonCompletedChange,
+    settings,
+    onSettingsChange,
+    playbackPositions,
+    onSavePosition,
+    themeToggle,
+  } = props;
   const [lessonIndex, setLessonIndex] = useState(0);
   const [tool, setTool] = useState<ToolKind>(DEFAULT_TOOL_BY_COURSE_TYPE[course.type]);
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -105,14 +119,12 @@ export function ClassroomPage(props: ClassroomPageProps) {
 
   if (!lesson) {
     return (
-      <div className="app-shell">
-        <header className="top-bar">
-          <button className="btn btn-ghost" onClick={onBack}>
-            ← 返回
-          </button>
-          <span className="panel-title">{course.name}</span>
+      <div className={appShell}>
+        <header className={topBar}>
+          <IconButton name="back" label="返回课程库" onClick={onBack} />
+          <span className={panelTitle}>{course.name}</span>
         </header>
-        <div className="panel-empty">该课程没有课节，请在课程库重新扫描或检查文件夹内容。</div>
+        <EmptyState title="该课程没有课节，请在课程库重新扫描或检查文件夹内容。" />
       </div>
     );
   }
@@ -129,57 +141,53 @@ export function ClassroomPage(props: ClassroomPageProps) {
   const docPane = <DocViewer resources={docResources} />;
 
   return (
-    <div className="app-shell">
-      <header className="top-bar classroom-bar">
-        <div className="classroom-left">
-          <button className="btn btn-ghost" onClick={onBack} title="返回课程库">
-            ←
-          </button>
-          <span className="course-title" title={course.name}>
+    <div className={appShell}>
+      <header className={topBar}>
+        <div className={classroomLeft}>
+          <IconButton name="back" label="返回课程库" onClick={onBack} />
+          <span className={courseTitle} title={course.name}>
             {course.name}
           </span>
         </div>
 
-        <div className="lesson-switcher">
-          <button className="btn btn-ghost" disabled={lessonIndex === 0} onClick={() => stepLesson(-1)}>
+        <div className={lessonSwitcher}>
+          <Button variant="ghost" size="sm" disabled={lessonIndex === 0} onClick={() => stepLesson(-1)}>
             上一节
-          </button>
-          <select value={lessonIndex} onChange={(e) => setLessonIndex(Number(e.target.value))}>
+          </Button>
+          <Select value={lessonIndex} onChange={(e) => setLessonIndex(Number(e.target.value))} maxWidth="280px">
             {course.lessons.map((l, i) => (
               <option key={l.id} value={i}>
                 {`${i + 1}. ${l.name}${l.completed ? " ✓" : ""}`}
               </option>
             ))}
-          </select>
-          <button
-            className="btn btn-ghost"
+          </Select>
+          <Button
+            variant="ghost"
+            size="sm"
             disabled={lessonIndex >= course.lessons.length - 1}
             onClick={() => stepLesson(1)}
           >
             下一节
-          </button>
+          </Button>
         </div>
 
-        <div className="classroom-right">
-          <label className="metro-check" title="标记本课节的学习进度">
-            <input
-              type="checkbox"
-              checked={lesson.completed}
-              onChange={(e) => onLessonCompletedChange(lesson.id, e.target.checked)}
-            />
-            已完成
-          </label>
-          <button
-            className="btn btn-ghost"
+        <div className={classroomRight}>
+          <Checkbox
+            checked={lesson.completed}
+            onChange={(completed) => onLessonCompletedChange(lesson.id, completed)}
+            label="已完成"
+            title="标记本课节的学习进度"
+          />
+          <IconButton
+            name="swap"
+            label="交换左右区域"
             onClick={() => onSettingsChange({ swapPanes: !settings.swapPanes })}
-            title="交换左右区域"
-          >
-            ⇄ 布局
-          </button>
+          />
+          {themeToggle}
         </div>
       </header>
 
-      <main className="main-area">
+      <main className={mainArea}>
         <SplitPane
           left={settings.swapPanes ? docPane : videoPane}
           right={settings.swapPanes ? videoPane : docPane}

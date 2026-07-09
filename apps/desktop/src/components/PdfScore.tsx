@@ -1,8 +1,9 @@
 /**
  * PDF 谱渲染器
  *
- * 基于 pdf.js 将 PDF 所有页渲染为 canvas 连续滚动展示，
- * 按 devicePixelRatio 提升清晰度，缩放时整体重渲染。
+ * 基于 pdf.js 将 PDF 所有页渲染为 canvas 连续滚动展示,
+ * 按 devicePixelRatio 提升清晰度,始终适配容器宽度,
+ * 容器尺寸变化(拖动分栏/窗口缩放)时自动重排。
  */
 import { useEffect, useRef, useState } from "react";
 import { EmptyState } from "@learning-house/ui";
@@ -14,23 +15,25 @@ import { pdfPageCanvas, pdfPages, scoreScroll } from "./docviewer.css";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
+/** 容器尺寸变化后的重渲染防抖间隔（毫秒） */
+const RESIZE_DEBOUNCE_MS = 150;
+
 interface PdfScoreProps {
   /** PDF 文件二进制内容 */
   data: Uint8Array;
-  /** 缩放系数，1 表示适配容器宽度 */
-  zoom: number;
 }
 
 /**
- * PDF 谱组件
+ * PDF 谱组件:加载文档并按容器宽度渲染,宽度变化时防抖重渲染
  *
- * @param props data PDF 字节；zoom 缩放系数
+ * @param props data PDF 字节
  */
-export function PdfScore({ data, zoom }: PdfScoreProps) {
+export function PdfScore({ data }: PdfScoreProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const taskRef = useRef<PDFDocumentLoadingTask | null>(null);
   const [doc, setDoc] = useState<PDFDocumentProxy | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [containerWidth, setContainerWidth] = useState(0);
 
   // 加载 PDF 文档（data 变化时重新加载）
   useEffect(() => {
@@ -54,15 +57,31 @@ export function PdfScore({ data, zoom }: PdfScoreProps) {
     };
   }, [data]);
 
-  // 渲染全部页面（文档就绪或缩放变化时）
+  // 关键节点：监听容器尺寸变化（含首次挂载），防抖后更新宽度触发重渲染
   useEffect(() => {
-    if (!doc) return;
+    const el = containerRef.current;
+    if (!el) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const observer = new ResizeObserver(() => {
+      clearTimeout(timer);
+      timer = setTimeout(() => setContainerWidth(el.clientWidth), RESIZE_DEBOUNCE_MS);
+    });
+    observer.observe(el);
+    return () => {
+      clearTimeout(timer);
+      observer.disconnect();
+    };
+  }, []);
+
+  // 渲染全部页面（文档就绪或容器宽度变化时）
+  useEffect(() => {
+    if (!doc || containerWidth <= 0) return;
     let cancelled = false;
-    void renderAllPages(doc, containerRef.current!, zoom, () => cancelled);
+    void renderAllPages(doc, containerRef.current!, containerWidth, () => cancelled);
     return () => {
       cancelled = true;
     };
-  }, [doc, zoom]);
+  }, [doc, containerWidth]);
 
   if (error) {
     return <EmptyState title={`PDF 加载失败：${error}`} />;
@@ -71,28 +90,28 @@ export function PdfScore({ data, zoom }: PdfScoreProps) {
 }
 
 /**
- * 把 PDF 的每一页渲染成 canvas 追加到容器中
+ * 把 PDF 的每一页按适宽尺寸渲染成 canvas 追加到容器中
  *
  * @param doc pdf.js 文档对象
  * @param container 目标容器（渲染前会清空）
- * @param zoom 用户缩放系数（1 = 适配容器宽度）
+ * @param containerWidth 容器可视宽度（px）
  * @param isCancelled 查询当前渲染任务是否已被取消
  */
 async function renderAllPages(
   doc: PDFDocumentProxy,
   container: HTMLDivElement,
-  zoom: number,
+  containerWidth: number,
   isCancelled: () => boolean,
 ): Promise<void> {
-  const containerWidth = Math.max(200, container.clientWidth - 24);
+  const pageWidth = Math.max(200, containerWidth - 24);
   const dpr = window.devicePixelRatio || 1;
   container.innerHTML = "";
   for (let pageNum = 1; pageNum <= doc.numPages; pageNum++) {
     if (isCancelled()) return;
     const page = await doc.getPage(pageNum);
-    // 先按原始尺寸算出适配宽度的基础缩放，再叠加用户缩放与像素密度
+    // 先按原始尺寸算出适配宽度的基础缩放，再叠加像素密度
     const baseViewport = page.getViewport({ scale: 1 });
-    const cssScale = (containerWidth / baseViewport.width) * zoom;
+    const cssScale = pageWidth / baseViewport.width;
     const viewport = page.getViewport({ scale: cssScale * dpr });
 
     const canvas = document.createElement("canvas");

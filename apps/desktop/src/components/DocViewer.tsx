@@ -2,23 +2,18 @@
  * 文档查看器
  *
  * 承载当前课节的文档类资源（图片 / PDF / Guitar Pro），
- * 多个文档时提供 tab 切换，提供缩放工具条，按类型分发到对应渲染器。
+ * 多个文档时提供 tab 切换，按类型分发到对应渲染器。
+ * 所有渲染器默认适配容器宽度并随窗口变化自动重排。
  */
 import { useEffect, useState } from "react";
-import { Button, EmptyState, IconButton, Tabs } from "@learning-house/ui";
+import { EmptyState, Tabs } from "@learning-house/ui";
 import { mediaSrc, readBinary } from "../lib/platform";
 import type { LessonResource } from "../types";
 import { panelTitle, panelToolbar } from "../styles/layout.css";
-import { scoreViewer, zoomGroup, zoomLabel } from "./docviewer.css";
+import { scoreViewer } from "./docviewer.css";
 import { ImageScore } from "./ImageScore";
 import { PdfScore } from "./PdfScore";
 import { AlphaTabScore } from "./AlphaTabScore";
-
-/** 单次缩放步长 */
-const ZOOM_STEP = 0.15;
-/** 缩放范围 */
-const ZOOM_MIN = 0.4;
-const ZOOM_MAX = 3;
 
 interface DocViewerProps {
   /** 当前课节的文档资源列表（可为空） */
@@ -32,7 +27,6 @@ interface DocViewerProps {
  */
 export function DocViewer({ resources }: DocViewerProps) {
   const [activeIndex, setActiveIndex] = useState(0);
-  const [zoom, setZoom] = useState(1);
   const [binary, setBinary] = useState<Uint8Array | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -45,7 +39,6 @@ export function DocViewer({ resources }: DocViewerProps) {
 
   // PDF 与 Guitar Pro 需要读取文件字节；图片直接走 asset URL
   useEffect(() => {
-    setZoom(1);
     setBinary(null);
     setLoadError(null);
     if (!active || active.kind === "image") return;
@@ -80,26 +73,8 @@ export function DocViewer({ resources }: DocViewerProps) {
             {active.name}
           </span>
         )}
-        <div className={zoomGroup}>
-          <IconButton
-            name="minus"
-            label="缩小"
-            size="sm"
-            onClick={() => setZoom((z) => Math.max(ZOOM_MIN, +(z - ZOOM_STEP).toFixed(2)))}
-          />
-          <span className={zoomLabel}>{Math.round(zoom * 100)}%</span>
-          <IconButton
-            name="plus"
-            label="放大"
-            size="sm"
-            onClick={() => setZoom((z) => Math.min(ZOOM_MAX, +(z + ZOOM_STEP).toFixed(2)))}
-          />
-          <Button variant="ghost" size="sm" onClick={() => setZoom(1)}>
-            适宽
-          </Button>
-        </div>
       </div>
-      {renderBody(active, zoom, binary, loadError)}
+      {renderBody(active, binary, loadError)}
     </div>
   );
 }
@@ -108,22 +83,21 @@ export function DocViewer({ resources }: DocViewerProps) {
  * 根据文档类型分发到对应渲染器
  *
  * @param doc 文档资源
- * @param zoom 缩放系数
  * @param binary 已读取的文件字节（图片类型为 null）
  * @param loadError 文件读取错误信息
  */
-function renderBody(doc: LessonResource, zoom: number, binary: Uint8Array | null, loadError: string | null) {
+function renderBody(doc: LessonResource, binary: Uint8Array | null, loadError: string | null) {
   if (loadError) {
     return <EmptyState title={`文件读取失败：${loadError}`} />;
   }
   if (doc.kind === "image") {
-    return <ImageScore src={mediaSrc(doc.path)} zoom={zoom} />;
+    return <ImageScore src={mediaSrc(doc.path)} />;
   }
   if (!binary) {
     return <EmptyState title="加载中…" />;
   }
   if (doc.kind === "pdf") {
-    return <PdfScore data={binary} zoom={zoom} />;
+    return <PdfScore data={binary} />;
   }
-  return <AlphaTabScore data={binary} zoom={zoom} />;
+  return <AlphaTabScore data={binary} />;
 }

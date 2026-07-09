@@ -1,27 +1,41 @@
 /**
  * 图片谱渲染器
  *
- * 直接用 img 展示图片谱（截图/照片），宽度随缩放系数变化，
- * 超出部分由外层滚动容器承载。
+ * 默认适配容器宽度(随窗口变化自动跟随);
+ * 双击在"适宽/原始尺寸"间切换,兜底超宽长条图(如指板图)看不清细节的场景,
+ * 原始尺寸下超出部分由外层滚动容器承载。
  */
+import { useEffect, useState } from "react";
 import { scoreImage, scoreScroll } from "./docviewer.css";
 
 interface ImageScoreProps {
   /** asset 协议图片 URL */
   src: string;
-  /** 缩放系数，1 表示适配容器宽度 */
-  zoom: number;
 }
 
 /**
  * 图片谱组件
  *
- * @param props src 图片地址；zoom 缩放系数
+ * @param props src 图片地址
  */
-export function ImageScore({ src, zoom }: ImageScoreProps) {
+export function ImageScore({ src }: ImageScoreProps) {
+  const [fitWidth, setFitWidth] = useState(true);
+
+  // 切换图片时回到适宽模式
+  useEffect(() => {
+    setFitWidth(true);
+  }, [src]);
+
   return (
     <div className={scoreScroll}>
-      <img className={scoreImage} src={src} style={{ width: `${zoom * 100}%` }} alt="乐谱" />
+      <img
+        className={scoreImage}
+        src={src}
+        style={{ width: fitWidth ? "100%" : "auto", cursor: fitWidth ? "zoom-in" : "zoom-out" }}
+        onDoubleClick={() => setFitWidth((f) => !f)}
+        title="双击切换适宽 / 原始大小"
+        alt="乐谱"
+      />
     </div>
   );
 }

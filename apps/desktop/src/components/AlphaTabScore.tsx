@@ -2,8 +2,8 @@
  * Guitar Pro 谱渲染器
  *
  * 基于 alphaTab 渲染 .gp/.gp3/.gp4/.gp5/.gpx 文件，
- * 输出标准五线谱 + 六线谱（TAB），缩放通过 alphaTab 的
- * display.scale 设置实现。
+ * 输出标准五线谱 + 六线谱（TAB），alphaTab 自带容器
+ * 尺寸监听，窗口/分栏变化时自动重排。
  */
 import { useEffect, useRef, useState } from "react";
 import { EmptyState } from "@learning-house/ui";
@@ -13,16 +13,14 @@ import { alphaTabHost, scoreScroll } from "./docviewer.css";
 interface AlphaTabScoreProps {
   /** Guitar Pro 文件二进制内容 */
   data: Uint8Array;
-  /** 缩放系数，1 为原始大小 */
-  zoom: number;
 }
 
 /**
  * Guitar Pro 谱组件
  *
- * @param props data 谱文件字节；zoom 缩放系数
+ * @param props data 谱文件字节
  */
-export function AlphaTabScore({ data, zoom }: AlphaTabScoreProps) {
+export function AlphaTabScore({ data }: AlphaTabScoreProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const apiRef = useRef<alphaTabLib.AlphaTabApi | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -60,15 +58,6 @@ export function AlphaTabScore({ data, zoom }: AlphaTabScoreProps) {
       apiRef.current = null;
     };
   }, [data]);
-
-  // 缩放变化时更新设置并重渲染
-  useEffect(() => {
-    const api = apiRef.current;
-    if (!api) return;
-    api.settings.display.scale = zoom;
-    api.updateSettings();
-    api.render();
-  }, [zoom]);
 
   if (error) {
     return <EmptyState title={`Guitar Pro 谱加载失败：${error}`} />;

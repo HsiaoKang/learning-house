@@ -44,18 +44,3 @@ export const pdfPageCanvas = style({
 export const alphaTabHost = style({
   background: vars.color.paper,
 });
-
-/** 缩放控制组 */
-export const zoomGroup = style({
-  display: "flex",
-  alignItems: "center",
-  gap: "6px",
-  flexShrink: 0,
-});
-
-export const zoomLabel = style({
-  fontSize: vars.font.size.sm,
-  color: vars.color.textDim,
-  minWidth: "42px",
-  textAlign: "center",
-});

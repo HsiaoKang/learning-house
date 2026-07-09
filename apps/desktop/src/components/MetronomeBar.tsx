@@ -6,8 +6,10 @@
  *
  * @author yuchenxi
  */
-import type { MetronomeOptions } from "@guitar-house/metronome-core";
+import { useState } from "react";
+import type { MetronomeOptions } from "@learning-house/metronome-core";
 import type { SyncConfig, SyncSource } from "../hooks/useMetronome";
+import { TapTempoModal } from "./TapTempoModal";
 
 /** 可选拍号（每小节拍数） */
 const BEATS_OPTIONS = [2, 3, 4, 6];
@@ -20,10 +22,9 @@ interface MetronomeBarProps {
   activeBeat: number;
   sync: SyncConfig;
   setSync: (patch: Partial<SyncConfig>) => void;
-  tapTempo: () => void;
-  /** 是否已打开视频（决定联动源可选性） */
+  /** 是否有视频资源（决定联动源可选性） */
   hasVideo: boolean;
-  /** 是否已打开伴奏（决定联动源可选性） */
+  /** 是否有音频资源（决定联动源可选性） */
   hasAudio: boolean;
   /** 读取当前联动源媒体的播放位置（用于一键设置首拍偏移） */
   getMediaTime: () => number | null;
@@ -35,7 +36,8 @@ interface MetronomeBarProps {
  * @param props 见 MetronomeBarProps 字段说明
  */
 export function MetronomeBar(props: MetronomeBarProps) {
-  const { options, updateOptions, running, toggle, activeBeat, sync, setSync, tapTempo, hasVideo, hasAudio, getMediaTime } = props;
+  const { options, updateOptions, running, toggle, activeBeat, sync, setSync, hasVideo, hasAudio, getMediaTime } = props;
+  const [tapOpen, setTapOpen] = useState(false);
 
   /**
    * 把联动源媒体当前播放位置记录为首拍偏移
@@ -50,9 +52,10 @@ export function MetronomeBar(props: MetronomeBarProps) {
       <button className={`btn btn-metro ${running ? "running" : ""}`} onClick={toggle} title="启动/停止节拍器（自由模式）">
         {running ? "■ 停止" : "▶ 节拍"}
       </button>
-      <button className="btn btn-ghost" onClick={tapTempo} title="按节奏连点几下自动测出 BPM">
+      <button className="btn btn-ghost" onClick={() => setTapOpen(true)} title="打开 Tap Tempo 浮窗测速">
         TAP
       </button>
+      <TapTempoModal open={tapOpen} onClose={() => setTapOpen(false)} onApply={(bpm) => updateOptions({ bpm })} />
 
       <div className="metro-group bpm-group">
         <input

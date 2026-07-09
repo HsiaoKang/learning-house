@@ -37,6 +37,8 @@ export function AlphaTabScore({ data, zoom }: AlphaTabScoreProps) {
         // 主线程渲染，避免 WebView 环境下 worker 加载不稳定
         engine: "svg",
         useWorkers: false,
+        // 字体由 vite 插件拷贝到 public/font，显式指定避免路径推导失效
+        fontDirectory: "/font/",
       },
       player: {
         playerMode: alphaTabLib.PlayerMode.Disabled,
@@ -48,7 +50,8 @@ export function AlphaTabScore({ data, zoom }: AlphaTabScoreProps) {
     apiRef.current = api;
     api.error.on((e) => setError(e.message ?? "乐谱解析失败"));
     try {
-      api.load(data);
+      // slice 产生紧凑副本，alphaTab 需要精确的 ArrayBuffer 边界
+      api.load(data.slice().buffer);
     } catch (e) {
       setError(String(e));
     }

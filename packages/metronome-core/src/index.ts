@@ -1,5 +1,5 @@
 /**
- * @guitar-house/metronome-core 包入口
+ * @learning-house/metronome-core 包入口
  *
  * @author yuchenxi
  */

@@ -1,28 +1,24 @@
 /**
- * 伴奏播放条
+ * 伴奏/音频播放条
  *
- * 位于主区与节拍器条之间的横向控制条，播放本地伴奏音频
- * （mp3 / m4a / wav / flac 等），提供进度拖动、倍速、循环与音量控制，
+ * 位于主区与工具栏之间的横向控制条，播放当前课节的音频资源，
+ * 多个音频时提供下拉切换；提供进度拖动、倍速、循环与音量控制，
  * 并把媒体事件转发给节拍器实现"跟随伴奏"联动。
  *
  * @author yuchenxi
  */
-import { useState, type RefObject } from "react";
+import { useEffect, useState, type RefObject } from "react";
+import { mediaSrc } from "../lib/platform";
 import type { MediaEngineControl } from "../hooks/useMetronome";
+import type { LessonResource } from "../types";
 
 /** 可选倍速档位（与视频一致，慢速扒歌/合奏场景） */
 const PLAYBACK_RATES = [0.5, 0.65, 0.75, 0.85, 1, 1.25, 1.5];
 
 interface AudioPlayerBarProps {
-  /** asset 协议音频 URL */
-  src: string;
-  /** 展示用文件名 */
-  fileName: string;
-  /** 触发文件选择 */
-  onOpenFile: () => void;
-  /** 关闭伴奏（清空当前文件） */
-  onClose: () => void;
-  /** audio 元素引用（供 App 层查询播放进度） */
+  /** 当前课节的音频资源列表（非空时才渲染本组件） */
+  resources: LessonResource[];
+  /** audio 元素引用（供外层查询播放进度） */
   audioRef: RefObject<HTMLAudioElement | null>;
   /** 节拍器联动控制接口（audio 源） */
   engineControl: MediaEngineControl;
@@ -42,18 +38,28 @@ function formatTime(sec: number): string {
 }
 
 /**
- * 伴奏播放条组件
+ * 音频播放条组件
  *
  * @param props 见 AudioPlayerBarProps 字段说明
  */
 export function AudioPlayerBar(props: AudioPlayerBarProps) {
-  const { src, fileName, onOpenFile, onClose, audioRef, engineControl } = props;
+  const { resources, audioRef, engineControl } = props;
+  const [activeIndex, setActiveIndex] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [rate, setRate] = useState(1);
   const [loop, setLoop] = useState(false);
   const [volume, setVolume] = useState(1);
+
+  // 课节切换时回到第一个音频
+  useEffect(() => {
+    setActiveIndex(0);
+    setPlaying(false);
+    setRate(1);
+  }, [resources]);
+
+  const active = resources[Math.min(activeIndex, resources.length - 1)] ?? null;
 
   /**
    * 读取音频元素当前进度并执行回调（元素不存在时忽略）
@@ -107,11 +113,14 @@ export function AudioPlayerBar(props: AudioPlayerBarProps) {
     if (el) el.volume = next;
   };
 
+  if (!active) return null;
+
   return (
     <div className="audio-bar">
       <audio
+        key={active.path}
         ref={audioRef}
-        src={src}
+        src={mediaSrc(active.path)}
         loop={loop}
         onPlay={() => {
           setPlaying(true);
@@ -131,13 +140,31 @@ export function AudioPlayerBar(props: AudioPlayerBarProps) {
           setCurrentTime(audioRef.current?.currentTime ?? 0);
           withAudio(engineControl.align);
         }}
-        onLoadedMetadata={() => setDuration(audioRef.current?.duration ?? 0)}
+        onLoadedMetadata={() => {
+          setDuration(audioRef.current?.duration ?? 0);
+          if (audioRef.current) audioRef.current.playbackRate = rate;
+        }}
       />
 
-      <span className="audio-tag">伴奏</span>
+      <span className="audio-tag">音频</span>
       <button className="btn btn-ghost audio-play-btn" onClick={togglePlay}>
         {playing ? "⏸" : "▶"}
       </button>
+
+      {resources.length > 1 && (
+        <select
+          className="audio-select"
+          value={activeIndex}
+          onChange={(e) => setActiveIndex(Number(e.target.value))}
+          title="切换音频"
+        >
+          {resources.map((res, i) => (
+            <option key={res.path} value={i}>
+              {res.name}
+            </option>
+          ))}
+        </select>
+      )}
 
       <span className="audio-time">{formatTime(currentTime)}</span>
       <input
@@ -169,15 +196,11 @@ export function AudioPlayerBar(props: AudioPlayerBarProps) {
         <input type="range" min={0} max={1} step={0.05} value={volume} onChange={(e) => changeVolume(Number(e.target.value))} />
       </div>
 
-      <span className="panel-title audio-name" title={fileName}>
-        {fileName}
-      </span>
-      <button className="btn btn-ghost" onClick={onOpenFile}>
-        换伴奏
-      </button>
-      <button className="btn btn-ghost" onClick={onClose} title="关闭伴奏">
-        ✕
-      </button>
+      {resources.length === 1 && (
+        <span className="panel-title audio-name" title={active.name}>
+          {active.name}
+        </span>
+      )}
     </div>
   );
 }

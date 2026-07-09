@@ -1,9 +1,9 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Guitar House",
-  "mainBinaryName": "guitar-house",
+  "productName": "Learning House",
+  "mainBinaryName": "learning-house",
   "version": "0.2.0",
-  "identifier": "com.yuchenxi.guitarhouse",
+  "identifier": "com.yuchenxi.learninghouse",
   "build": {
     "beforeDevCommand": "pnpm dev",
     "devUrl": "http://localhost:1420",
@@ -13,7 +13,7 @@
   "app": {
     "windows": [
       {
-        "title": "Guitar House",
+        "title": "Learning House",
         "width": 1440,
         "height": 900,
         "minWidth": 960,
@@ -24,9 +24,7 @@
       "csp": null,
       "assetProtocol": {
         "enable": true,
-        "scope": [
-          "**"
-        ]
+        "scope": ["**"]
       }
     }
   },

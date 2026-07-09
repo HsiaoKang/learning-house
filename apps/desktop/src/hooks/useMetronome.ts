@@ -7,7 +7,7 @@
  * @author yuchenxi
  */
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Metronome, type MetronomeOptions } from "@guitar-house/metronome-core";
+import { Metronome, type MetronomeOptions } from "@learning-house/metronome-core";
 
 /** 联动源：节拍器跟随哪个媒体的时间轴 */
 export type SyncSource = "none" | "video" | "audio";
@@ -47,8 +47,6 @@ export interface UseMetronomeResult {
   setSync: (patch: Partial<SyncConfig>) => void;
   /** 为指定联动源生成引擎控制接口（源不匹配时调用会被忽略） */
   bindSource: (source: Exclude<SyncSource, "none">) => MediaEngineControl;
-  /** Tap Tempo：连续点按推算 BPM */
-  tapTempo: () => void;
 }
 
 /**
@@ -69,7 +67,6 @@ export function useMetronome(): UseMetronomeResult {
   const [sync, setSyncState] = useState<SyncConfig>({ source: "none", firstBeatOffset: 0 });
   const syncRef = useRef(sync);
   syncRef.current = sync;
-  const tapTimesRef = useRef<number[]>([]);
 
   // 订阅拍事件驱动指示灯；组件卸载时释放音频资源
   useEffect(() => {
@@ -113,25 +110,6 @@ export function useMetronome(): UseMetronomeResult {
   );
 
   /**
-   * Tap Tempo 实现：取最近 5 次点按的平均间隔换算 BPM。
-   * 超过 2 秒未点按则重新计数。
-   */
-  const tapTempo = useCallback(() => {
-    const now = performance.now();
-    const taps = tapTimesRef.current;
-    if (taps.length > 0 && now - taps[taps.length - 1] > 2000) {
-      taps.length = 0;
-    }
-    taps.push(now);
-    if (taps.length > 5) taps.shift();
-    if (taps.length >= 2) {
-      const avgMs = (taps[taps.length - 1] - taps[0]) / (taps.length - 1);
-      const bpm = Math.round(Math.min(300, Math.max(20, 60000 / avgMs)));
-      updateOptions({ bpm });
-    }
-  }, [updateOptions]);
-
-  /**
    * 为指定媒体源生成引擎控制接口。
    * 关键节点：仅当该源是当前选中的联动源时，媒体事件才会驱动节拍器，
    * 因此视频与伴奏可以各自挂接而互不干扰。
@@ -167,5 +145,5 @@ export function useMetronome(): UseMetronomeResult {
     [engine],
   );
 
-  return { options, updateOptions, running, toggle, activeBeat, sync, setSync, bindSource, tapTempo };
+  return { options, updateOptions, running, toggle, activeBeat, sync, setSync, bindSource };
 }

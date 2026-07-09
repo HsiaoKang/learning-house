@@ -1,5 +1,5 @@
 {
-  "name": "@guitar-house/desktop",
+  "name": "@learning-house/desktop",
   "private": true,
   "version": "0.2.0",
   "type": "module",
@@ -12,10 +12,11 @@
   },
   "dependencies": {
     "@coderline/alphatab": "^1.8.4",
-    "@guitar-house/metronome-core": "workspace:*",
+    "@learning-house/metronome-core": "workspace:*",
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-dialog": "^2",
     "@tauri-apps/plugin-fs": "^2",
+    "@tauri-apps/plugin-store": "^2.4.3",
     "pdfjs-dist": "^6.1.200",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"

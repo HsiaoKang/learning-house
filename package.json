@@ -1,12 +1,12 @@
 {
-  "name": "guitar-house",
+  "name": "learning-house",
   "version": "0.2.0",
   "private": true,
-  "description": "吉他练习工具：本地视频播放 + 看谱 + 节拍器",
+  "description": "通用课程管理与上课工具：课节化整合视频/音频/图片/PDF 资源，配套练习工具",
   "author": "yuchenxi",
   "scripts": {
-    "dev": "pnpm --filter @guitar-house/desktop tauri dev",
-    "build": "pnpm --filter @guitar-house/desktop tauri build",
+    "dev": "pnpm --filter @learning-house/desktop tauri dev",
+    "build": "pnpm --filter @learning-house/desktop tauri build",
     "typecheck": "pnpm -r typecheck"
   },
   "packageManager": "pnpm@10.18.3",

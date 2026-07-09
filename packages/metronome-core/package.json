@@ -1,5 +1,5 @@
 {
-  "name": "@guitar-house/metronome-core",
+  "name": "@learning-house/metronome-core",
   "version": "0.1.0",
   "private": true,
   "description": "节拍器核心引擎：基于 Web Audio API 的精准调度，支持自由模式与视频时间轴联动模式",

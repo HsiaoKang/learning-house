@@ -10,6 +10,11 @@ export default defineConfig(async () => ({
   // alphaTab 插件负责拷贝乐谱字体与 worker 资源
   plugins: [react(), alphaTab()],
 
+  // alphaTab 依赖 import.meta.url 定位字体/worker，预打包会破坏路径推导
+  optimizeDeps: {
+    exclude: ["@coderline/alphatab"],
+  },
+
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //
   // 1. prevent Vite from obscuring rust errors

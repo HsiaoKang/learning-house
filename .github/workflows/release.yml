@@ -76,7 +76,7 @@ jobs:
         with:
           projectPath: apps/desktop
           tagName: ${{ inputs.tag_name || github.ref_name }}
-          releaseName: "Guitar House ${{ inputs.tag_name || github.ref_name }}"
+          releaseName: "Learning House ${{ inputs.tag_name || github.ref_name }}"
           releaseBody: "macOS 用户请下载 .dmg（Apple Silicon 选 aarch64，Intel 选 x64）。"
           releaseDraft: false
           prerelease: false

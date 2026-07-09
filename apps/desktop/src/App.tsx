@@ -1,181 +1,189 @@
 /**
- * Guitar House 主界面
+ * Learning House 应用根组件
  *
- * 布局：顶栏（打开文件）+ 左视频右乐谱（可拖拽分割）
- * + 伴奏播放条（可选）+ 底部节拍器条。
+ * 负责视图路由（课程库 / 上课页）、课程库与设置的加载持久化。
  *
  * @author yuchenxi
  */
-import { useCallback, useMemo, useRef, useState } from "react";
-import { convertFileSrc } from "@tauri-apps/api/core";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
-import { VideoPlayer } from "./components/VideoPlayer";
-import { ScoreViewer } from "./components/ScoreViewer";
-import { MetronomeBar } from "./components/MetronomeBar";
-import { AudioPlayerBar } from "./components/AudioPlayerBar";
-import { SplitPane } from "./components/SplitPane";
-import { useMetronome } from "./hooks/useMetronome";
+import { LibraryPage } from "./pages/LibraryPage";
+import { ClassroomPage } from "./pages/ClassroomPage";
+import { scanCourseFolder } from "./lib/scanner";
 import {
-  AUDIO_EXTENSIONS,
-  GP_EXTENSIONS,
-  IMAGE_EXTENSIONS,
-  VIDEO_EXTENSIONS,
-  basename,
-  scoreKindOf,
-  type ScoreFile,
-} from "./types";
+  DEFAULT_SETTINGS,
+  loadCourses,
+  loadPlaybackPositions,
+  loadSettings,
+  saveCourses,
+  savePlaybackPosition,
+  saveSettings,
+  type PlaybackPositions,
+} from "./lib/storage";
+import type { AppSettings, Course, CourseType } from "./types";
 import "./App.css";
 
 function App() {
-  const [videoPath, setVideoPath] = useState<string | null>(null);
-  const [audioPath, setAudioPath] = useState<string | null>(null);
-  const [playbackRate, setPlaybackRate] = useState(1);
-  const [score, setScore] = useState<ScoreFile | null>(null);
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const metronome = useMetronome();
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
+  const [activeCourseId, setActiveCourseId] = useState<string | null>(null);
+  const [loaded, setLoaded] = useState(false);
+  const positionsRef = useRef<PlaybackPositions>({});
 
-  // 为视频与伴奏分别生成联动控制接口（只有选中的联动源会驱动节拍器）
-  const videoControl = useMemo(() => metronome.bindSource("video"), [metronome.bindSource]);
-  const audioControl = useMemo(() => metronome.bindSource("audio"), [metronome.bindSource]);
-
-  /**
-   * 弹出原生对话框选择本地视频文件
-   */
-  const openVideo = useCallback(async () => {
-    const selected = await open({
-      multiple: false,
-      filters: [{ name: "视频", extensions: VIDEO_EXTENSIONS }],
-    });
-    if (typeof selected === "string") {
-      setVideoPath(selected);
-      setPlaybackRate(1);
-    }
+  // 启动时加载课程库、设置与续播位置
+  useEffect(() => {
+    void Promise.all([loadCourses(), loadSettings(), loadPlaybackPositions()]).then(
+      ([storedCourses, storedSettings, positions]) => {
+        setCourses(storedCourses);
+        setSettings(storedSettings);
+        positionsRef.current = positions;
+        setLoaded(true);
+      },
+    );
   }, []);
 
   /**
-   * 弹出原生对话框选择本地伴奏音频文件
-   */
-  const openAudio = useCallback(async () => {
-    const selected = await open({
-      multiple: false,
-      filters: [{ name: "伴奏音频", extensions: AUDIO_EXTENSIONS }],
-    });
-    if (typeof selected === "string") {
-      setAudioPath(selected);
-    }
-  }, []);
-
-  /**
-   * 关闭伴奏：若节拍器正跟随伴奏则先停止联动
-   */
-  const closeAudio = useCallback(() => {
-    if (metronome.sync.source === "audio") {
-      metronome.setSync({ source: "none" });
-    }
-    setAudioPath(null);
-  }, [metronome]);
-
-  /**
-   * 弹出原生对话框选择乐谱文件（图片 / PDF / Guitar Pro）
-   */
-  const openScore = useCallback(async () => {
-    const selected = await open({
-      multiple: false,
-      filters: [
-        { name: "乐谱", extensions: [...IMAGE_EXTENSIONS, "pdf", ...GP_EXTENSIONS] },
-        { name: "图片", extensions: IMAGE_EXTENSIONS },
-        { name: "PDF", extensions: ["pdf"] },
-        { name: "Guitar Pro", extensions: GP_EXTENSIONS },
-      ],
-    });
-    if (typeof selected === "string") {
-      const kind = scoreKindOf(selected);
-      if (kind) setScore({ path: selected, name: basename(selected), kind });
-    }
-  }, []);
-
-  /**
-   * 修改视频倍速：同步到 video 元素，节拍器经 ratechange 事件自动对齐
+   * 更新课程库并持久化
    *
-   * @param rate 目标倍速
+   * @param updater 基于当前课程列表计算新列表
    */
-  const changeRate = useCallback((rate: number) => {
-    setPlaybackRate(rate);
-    if (videoRef.current) videoRef.current.playbackRate = rate;
+  const updateCourses = useCallback((updater: (prev: Course[]) => Course[]) => {
+    setCourses((prev) => {
+      const next = updater(prev);
+      void saveCourses(next);
+      return next;
+    });
   }, []);
 
   /**
-   * 读取当前联动源媒体的播放位置（秒），无联动源或未打开时返回 null
+   * 从文件夹导入课程：弹目录选择器 -> 扫描 -> 加入课程库
+   *
+   * @param type 课程类型
    */
-  const getMediaTime = useCallback(() => {
-    if (metronome.sync.source === "video") return videoRef.current?.currentTime ?? null;
-    if (metronome.sync.source === "audio") return audioRef.current?.currentTime ?? null;
-    return null;
-  }, [metronome.sync.source]);
+  const importFolder = useCallback(
+    async (type: CourseType) => {
+      const selected = await open({ directory: true, multiple: false, title: "选择课程根文件夹" });
+      if (typeof selected !== "string") return;
+      const course = await scanCourseFolder(selected, type);
+      if (course.lessons.length === 0) {
+        alert("该文件夹内没有识别到可用资源（视频/音频/图片/PDF/Guitar Pro）。");
+        return;
+      }
+      updateCourses((prev) => [...prev, course]);
+    },
+    [updateCourses],
+  );
+
+  /**
+   * 重新扫描课程根文件夹，保留同名课节的完成状态
+   *
+   * @param id 课程 id
+   */
+  const rescanCourse = useCallback(
+    async (id: string) => {
+      const target = courses.find((c) => c.id === id);
+      if (!target?.rootDir) return;
+      const fresh = await scanCourseFolder(target.rootDir, target.type);
+      updateCourses((prev) =>
+        prev.map((c) => {
+          if (c.id !== id) return c;
+          // 关键节点：按课节名继承旧的完成状态
+          const completedNames = new Set(c.lessons.filter((l) => l.completed).map((l) => l.name));
+          return {
+            ...c,
+            lessons: fresh.lessons.map((l) => ({ ...l, completed: completedNames.has(l.name) })),
+          };
+        }),
+      );
+    },
+    [courses, updateCourses],
+  );
+
+  /**
+   * 从课程库删除课程（不动磁盘文件）
+   *
+   * @param id 课程 id
+   */
+  const deleteCourse = useCallback(
+    (id: string) => {
+      updateCourses((prev) => prev.filter((c) => c.id !== id));
+      if (activeCourseId === id) setActiveCourseId(null);
+    },
+    [updateCourses, activeCourseId],
+  );
+
+  /**
+   * 更新课节完成状态
+   *
+   * @param courseId 课程 id
+   * @param lessonId 课节 id
+   * @param completed 是否完成
+   */
+  const setLessonCompleted = useCallback(
+    (courseId: string, lessonId: string, completed: boolean) => {
+      updateCourses((prev) =>
+        prev.map((c) =>
+          c.id === courseId
+            ? { ...c, lessons: c.lessons.map((l) => (l.id === lessonId ? { ...l, completed } : l)) }
+            : c,
+        ),
+      );
+    },
+    [updateCourses],
+  );
+
+  /**
+   * 更新应用设置并持久化
+   *
+   * @param patch 设置变更
+   */
+  const updateSettings = useCallback((patch: Partial<AppSettings>) => {
+    setSettings((prev) => {
+      const next = { ...prev, ...patch };
+      void saveSettings(next);
+      return next;
+    });
+  }, []);
+
+  /**
+   * 保存资源续播位置
+   *
+   * @param path 资源路径
+   * @param position 位置（秒）
+   */
+  const savePosition = useCallback((path: string, position: number) => {
+    positionsRef.current[path] = position;
+    void savePlaybackPosition(path, position);
+  }, []);
+
+  if (!loaded) {
+    return <div className="app-loading">加载中…</div>;
+  }
+
+  const activeCourse = courses.find((c) => c.id === activeCourseId) ?? null;
+
+  if (activeCourse) {
+    return (
+      <ClassroomPage
+        course={activeCourse}
+        onBack={() => setActiveCourseId(null)}
+        onLessonCompletedChange={(lessonId, completed) => setLessonCompleted(activeCourse.id, lessonId, completed)}
+        settings={settings}
+        onSettingsChange={updateSettings}
+        playbackPositions={positionsRef.current}
+        onSavePosition={savePosition}
+      />
+    );
+  }
 
   return (
-    <div className="app-shell">
-      <header className="top-bar">
-        <div className="brand">
-          <span className="brand-mark">🎸</span>
-          <span className="brand-name">Guitar House</span>
-        </div>
-        <div className="top-actions">
-          <button className="btn btn-ghost" onClick={openVideo}>
-            打开视频
-          </button>
-          <button className="btn btn-ghost" onClick={openAudio}>
-            打开伴奏
-          </button>
-          <button className="btn btn-ghost" onClick={openScore}>
-            打开乐谱
-          </button>
-        </div>
-      </header>
-
-      <main className="main-area">
-        <SplitPane
-          left={
-            <VideoPlayer
-              src={videoPath ? convertFileSrc(videoPath) : null}
-              fileName={videoPath ? basename(videoPath) : null}
-              playbackRate={playbackRate}
-              onRateChange={changeRate}
-              onOpenFile={openVideo}
-              videoRef={videoRef}
-              engineControl={videoControl}
-            />
-          }
-          right={<ScoreViewer score={score} onOpenFile={openScore} />}
-        />
-      </main>
-
-      {audioPath && (
-        <AudioPlayerBar
-          src={convertFileSrc(audioPath)}
-          fileName={basename(audioPath)}
-          onOpenFile={openAudio}
-          onClose={closeAudio}
-          audioRef={audioRef}
-          engineControl={audioControl}
-        />
-      )}
-
-      <MetronomeBar
-        options={metronome.options}
-        updateOptions={metronome.updateOptions}
-        running={metronome.running}
-        toggle={metronome.toggle}
-        activeBeat={metronome.activeBeat}
-        sync={metronome.sync}
-        setSync={metronome.setSync}
-        tapTempo={metronome.tapTempo}
-        hasVideo={videoPath !== null}
-        hasAudio={audioPath !== null}
-        getMediaTime={getMediaTime}
-      />
-    </div>
+    <LibraryPage
+      courses={courses}
+      onOpenCourse={setActiveCourseId}
+      onImportFolder={(type) => void importFolder(type)}
+      onRescanCourse={(id) => void rescanCourse(id)}
+      onDeleteCourse={deleteCourse}
+    />
   );
 }
 

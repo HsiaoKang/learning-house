@@ -19,8 +19,8 @@ const KEY_COURSES = "courses";
 const KEY_SETTINGS = "settings";
 const KEY_PLAYBACK = "playbackPositions";
 
-/** 默认设置 */
-export const DEFAULT_SETTINGS: AppSettings = { swapPanes: false, theme: "dark" };
+/** 默认设置（主题默认跟随系统外观） */
+export const DEFAULT_SETTINGS: AppSettings = { swapPanes: false, theme: "system" };
 
 /** 视频续播位置表：resourcePath -> 秒 */
 export type PlaybackPositions = Record<string, number>;

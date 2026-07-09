@@ -22,14 +22,44 @@ import {
   saveSettings,
   type PlaybackPositions,
 } from "./lib/storage";
-import type { AppSettings, Course, CourseType } from "./types";
+import type { AppSettings, Course, CourseType, ResolvedTheme, ThemeKind } from "./types";
 import { appLoading } from "./styles/layout.css";
 
-/** 主题标识到 vanilla-extract 主题 class 的映射 */
-const THEME_CLASSES: Record<AppSettings["theme"], string> = {
+/** 实际主题到 vanilla-extract 主题 class 的映射 */
+const THEME_CLASSES: Record<ResolvedTheme, string> = {
   dark: darkThemeClass,
   light: lightThemeClass,
 };
+
+/** 主题偏好的循环切换顺序 */
+const THEME_CYCLE: Record<ThemeKind, ThemeKind> = {
+  system: "light",
+  light: "dark",
+  dark: "system",
+};
+
+/** 主题切换按钮的图标与说明（展示当前偏好） */
+const THEME_TOGGLE_META: Record<ThemeKind, { icon: "monitor" | "sun" | "moon"; label: string }> = {
+  system: { icon: "monitor", label: "主题：跟随系统（点击切为亮色）" },
+  light: { icon: "sun", label: "主题：亮色（点击切为暗色）" },
+  dark: { icon: "moon", label: "主题：暗色（点击切为跟随系统）" },
+};
+
+/**
+ * 订阅系统外观（prefers-color-scheme），返回系统当前的实际主题
+ */
+function useSystemTheme(): ResolvedTheme {
+  const [systemTheme, setSystemTheme] = useState<ResolvedTheme>(() =>
+    window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light",
+  );
+  useEffect(() => {
+    const query = window.matchMedia("(prefers-color-scheme: dark)");
+    const onChange = (e: MediaQueryListEvent) => setSystemTheme(e.matches ? "dark" : "light");
+    query.addEventListener("change", onChange);
+    return () => query.removeEventListener("change", onChange);
+  }, []);
+  return systemTheme;
+}
 
 function App() {
   const [courses, setCourses] = useState<Course[]>([]);
@@ -37,6 +67,10 @@ function App() {
   const [activeCourseId, setActiveCourseId] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
   const positionsRef = useRef<PlaybackPositions>({});
+  const systemTheme = useSystemTheme();
+
+  // 实际渲染主题：偏好为 system 时跟随系统外观
+  const resolvedTheme: ResolvedTheme = settings.theme === "system" ? systemTheme : settings.theme;
 
   // 启动时加载课程库、设置与续播位置
   useEffect(() => {
@@ -51,12 +85,12 @@ function App() {
     );
   }, []);
 
-  // 关键节点：把当前主题 class 挂到根元素，token 变量随之切换
+  // 关键节点：把实际主题 class 挂到根元素，token 变量随之切换
   useEffect(() => {
     const el = document.documentElement;
     el.classList.remove(...Object.values(THEME_CLASSES));
-    el.classList.add(THEME_CLASSES[settings.theme]);
-  }, [settings.theme]);
+    el.classList.add(THEME_CLASSES[resolvedTheme]);
+  }, [resolvedTheme]);
 
   /**
    * 更新课程库并持久化
@@ -176,12 +210,13 @@ function App() {
     return <div className={appLoading}>加载中…</div>;
   }
 
-  // 主题切换按钮：两个页面顶栏共用
+  // 主题切换按钮：三态循环 跟随系统 -> 亮色 -> 暗色，两个页面顶栏共用
+  const toggleMeta = THEME_TOGGLE_META[settings.theme];
   const themeToggle = (
     <IconButton
-      name={settings.theme === "dark" ? "sun" : "moon"}
-      label={settings.theme === "dark" ? "切换为亮色主题" : "切换为暗色主题"}
-      onClick={() => updateSettings({ theme: settings.theme === "dark" ? "light" : "dark" })}
+      name={toggleMeta.icon}
+      label={toggleMeta.label}
+      onClick={() => updateSettings({ theme: THEME_CYCLE[settings.theme] })}
     />
   );
 

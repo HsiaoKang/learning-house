@@ -46,14 +46,17 @@ export interface Course {
   createdAt: number;
 }
 
-/** 主题标识 */
-export type ThemeKind = "dark" | "light";
+/** 实际渲染主题 */
+export type ResolvedTheme = "dark" | "light";
+
+/** 主题偏好：system 表示跟随系统外观 */
+export type ThemeKind = "system" | ResolvedTheme;
 
 /** 应用设置 */
 export interface AppSettings {
   /** 是否交换左右区域（false=视频左文档右） */
   swapPanes: boolean;
-  /** 界面主题 */
+  /** 界面主题偏好 */
   theme: ThemeKind;
 }
 

@@ -93,3 +93,37 @@ export const importActions = style({
 export const importTypeBtn = style({
   flex: 1,
 });
+
+/** 导入浮窗底部的 AI 整理入口(与主操作视觉区隔) */
+export const aiPromptEntry = style({
+  marginTop: vars.space.md,
+  paddingTop: vars.space.md,
+  borderTop: `1px solid ${vars.color.border}`,
+  display: "flex",
+  flexDirection: "column",
+  gap: vars.space.sm,
+});
+
+/** AI 提示词展示文本域 */
+export const aiPromptTextarea = style({
+  width: "100%",
+  height: "260px",
+  resize: "vertical",
+  background: vars.color.panel2,
+  color: vars.color.text,
+  border: `1px solid ${vars.color.border}`,
+  borderRadius: vars.radius.sm,
+  padding: vars.space.sm,
+  fontSize: vars.font.size.sm,
+  fontFamily: "monospace",
+  lineHeight: 1.5,
+  boxSizing: "border-box",
+});
+
+/** AI 提示词弹窗底部操作行 */
+export const aiPromptFooter = style({
+  display: "flex",
+  justifyContent: "flex-end",
+  gap: vars.space.sm,
+  marginTop: vars.space.sm,
+});

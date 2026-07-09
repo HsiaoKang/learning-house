@@ -9,7 +9,8 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { darkThemeClass, IconButton, lightThemeClass } from "@learning-house/ui";
 import { LibraryPage } from "./pages/LibraryPage";
 import { ClassroomPage } from "./pages/ClassroomPage";
-import { scanCourseFolder } from "./lib/scanner";
+import { readDirTree, scanCourseFolder } from "./lib/scanner";
+import { buildOrganizePrompt } from "./lib/aiPrompt";
 import {
   DEFAULT_SETTINGS,
   loadCourses,
@@ -112,7 +113,14 @@ function App() {
     async (type: CourseType) => {
       const selected = await open({ directory: true, multiple: false, title: "选择课程根文件夹" });
       if (typeof selected !== "string") return;
-      const course = await scanCourseFolder(selected, type);
+      let course: Course;
+      try {
+        course = await scanCourseFolder(selected, type);
+      } catch (e) {
+        // 关键节点：清单文件解析失败时把具体原因反馈给用户
+        alert(`导入失败：${e instanceof Error ? e.message : e}`);
+        return;
+      }
       if (course.lessons.length === 0) {
         alert("该文件夹内没有识别到可用资源（视频/音频/图片/PDF/Guitar Pro）。");
         return;
@@ -123,6 +131,22 @@ function App() {
   );
 
   /**
+   * 选择文件夹并生成 AI 整理提示词（文件清单 + 清单格式说明）
+   *
+   * @returns 提示词文本；取消选择或无可用资源时返回 null
+   */
+  const generateAiPrompt = useCallback(async (): Promise<string | null> => {
+    const selected = await open({ directory: true, multiple: false, title: "选择要整理的课程根文件夹" });
+    if (typeof selected !== "string") return null;
+    const prompt = buildOrganizePrompt(await readDirTree(selected, 0));
+    if (!prompt) {
+      alert("该文件夹内没有识别到可用资源（视频/音频/图片/PDF/Guitar Pro）。");
+      return null;
+    }
+    return prompt;
+  }, []);
+
+  /**
    * 重新扫描课程根文件夹，保留同名课节的完成状态
    *
    * @param id 课程 id
@@ -131,7 +155,13 @@ function App() {
     async (id: string) => {
       const target = courses.find((c) => c.id === id);
       if (!target?.rootDir) return;
-      const fresh = await scanCourseFolder(target.rootDir, target.type);
+      let fresh: Course;
+      try {
+        fresh = await scanCourseFolder(target.rootDir, target.type);
+      } catch (e) {
+        alert(`重新扫描失败：${e instanceof Error ? e.message : e}`);
+        return;
+      }
       updateCourses((prev) =>
         prev.map((c) => {
           if (c.id !== id) return c;
@@ -240,6 +270,7 @@ function App() {
       courses={courses}
       onOpenCourse={setActiveCourseId}
       onImportFolder={(type) => void importFolder(type)}
+      onGenerateAiPrompt={generateAiPrompt}
       onRescanCourse={(id) => void rescanCourse(id)}
       onDeleteCourse={deleteCourse}
       themeToggle={themeToggle}

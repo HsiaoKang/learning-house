@@ -9,6 +9,9 @@ import { BrandLogo, Button, EmptyState, IconButton, Modal, ProgressBar } from "@
 import { COURSE_TYPE_LABELS, type Course, type CourseType } from "../types";
 import { brand, brandName, topBar } from "../styles/layout.css";
 import {
+  aiPromptEntry,
+  aiPromptFooter,
+  aiPromptTextarea,
   courseCard,
   courseCardActions,
   courseCardHead,
@@ -30,6 +33,8 @@ interface LibraryPageProps {
   onOpenCourse: (id: string) => void;
   /** 选择文件夹导入课程（type 为课程类型） */
   onImportFolder: (type: CourseType) => void;
+  /** 选择文件夹并生成 AI 整理提示词（取消选择时返回 null） */
+  onGenerateAiPrompt: () => Promise<string | null>;
   /** 重新扫描课程根文件夹（保留完成状态） */
   onRescanCourse: (id: string) => void;
   /** 删除课程（仅移出课程库，不动磁盘文件） */
@@ -51,13 +56,41 @@ function progressOf(course: Course): { done: number; total: number } {
 }
 
 /**
+ * 复制文本到剪贴板
+ *
+ * @param text 待复制文本
+ * @returns 是否复制成功（失败时由调用方引导手动复制）
+ */
+async function copyToClipboard(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * 课程库页组件
  *
  * @param props 见 LibraryPageProps 字段说明
  */
 export function LibraryPage(props: LibraryPageProps) {
-  const { courses, onOpenCourse, onImportFolder, onRescanCourse, onDeleteCourse, themeToggle } = props;
+  const { courses, onOpenCourse, onImportFolder, onGenerateAiPrompt, onRescanCourse, onDeleteCourse, themeToggle } =
+    props;
   const [importOpen, setImportOpen] = useState(false);
+  const [aiPrompt, setAiPrompt] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  /** 选文件夹生成 AI 提示词并打开展示弹窗 */
+  const openAiPrompt = async () => {
+    setImportOpen(false);
+    const prompt = await onGenerateAiPrompt();
+    if (prompt) {
+      setCopied(false);
+      setAiPrompt(prompt);
+    }
+  };
 
   return (
     <div className={appShell}>
@@ -129,7 +162,10 @@ export function LibraryPage(props: LibraryPageProps) {
       </main>
 
       <Modal open={importOpen} onClose={() => setImportOpen(false)} title="导入课程" width="360px">
-        <p className={importHint}>选择课程类型后挑选课程根文件夹，子文件夹将自动归纳为课节。</p>
+        <p className={importHint}>
+          选择课程类型后挑选课程根文件夹。子文件夹自动归纳为课节；平铺编号视频的文件夹会按编号
+          与配套资料自动组课；根文件夹内有 learning-house.json 清单时优先按清单组课。
+        </p>
         <div className={importActions}>
           {(Object.keys(COURSE_TYPE_LABELS) as CourseType[]).map((type) => (
             <Button
@@ -144,6 +180,38 @@ export function LibraryPage(props: LibraryPageProps) {
               {COURSE_TYPE_LABELS[type]}课程
             </Button>
           ))}
+        </div>
+        <div className={aiPromptEntry}>
+          <p className={importHint}>目录太乱、自动整理不理想？可以让任意 AI 帮你生成课节清单。</p>
+          <Button variant="ghost" onClick={() => void openAiPrompt()}>
+            生成 AI 整理提示词
+          </Button>
+        </div>
+      </Modal>
+
+      <Modal open={aiPrompt !== null} onClose={() => setAiPrompt(null)} title="AI 整理提示词" width="560px">
+        <p className={importHint}>
+          把下面的提示词完整发给任意 AI（ChatGPT / 豆包 / Kimi…），将它回复的 JSON 保存为课程根文件夹下的
+          learning-house.json 文件，再回来导入该文件夹即可。
+        </p>
+        <textarea
+          className={aiPromptTextarea}
+          readOnly
+          value={aiPrompt ?? ""}
+          onFocus={(e) => e.currentTarget.select()}
+        />
+        <div className={aiPromptFooter}>
+          <Button
+            variant="primary"
+            onClick={() => {
+              void copyToClipboard(aiPrompt ?? "").then((ok) => {
+                setCopied(ok);
+                if (!ok) alert("复制失败，请点击文本框全选后手动复制。");
+              });
+            }}
+          >
+            {copied ? "已复制" : "复制提示词"}
+          </Button>
         </div>
       </Modal>
     </div>

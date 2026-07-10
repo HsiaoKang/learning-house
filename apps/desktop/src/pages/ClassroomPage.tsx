@@ -6,7 +6,7 @@
  * 全局媒体快捷键：空格播停、左右快进退、上下音量。
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Checkbox, EmptyState, IconButton, Select } from "@learning-house/ui";
+import { Button, Checkbox, EmptyState, IconButton, Select } from "@learning-house/ui";
 import { SplitPane } from "../components/SplitPane";
 import { VideoPlayer } from "../components/VideoPlayer";
 import { AudioPlayerBar } from "../components/AudioPlayerBar";
@@ -134,15 +134,17 @@ export function ClassroomPage(props: ClassroomPageProps) {
           className="max-w-[46vw] font-medium"
           title={course.name}
         />
-        <IconButton
-          name="chevronRight"
-          label="下一节"
+        <Button
+          variant="ghost"
+          size="sm"
           disabled={lessonIndex >= course.lessons.length - 1}
           onClick={() => {
             onNextLessonUsed();
             setLessonIndex((i) => Math.min(course.lessons.length - 1, i + 1));
           }}
-        />
+        >
+          下一节
+        </Button>
 
         <div className="flex flex-1 items-center justify-end gap-3">
           <Checkbox

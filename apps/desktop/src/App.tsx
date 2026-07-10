@@ -10,7 +10,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { IconButton } from "@learning-house/ui";
 import { LibraryPage } from "./pages/LibraryPage";
 import { ClassroomPage } from "./pages/ClassroomPage";
-import { readDirTree, scanCourseFolder, writeManifest } from "./lib/scanner";
+import { readDirTree, readManifestName, scanCourseFolder, writeManifest } from "./lib/scanner";
 import { buildOrganizePrompt } from "./lib/aiPrompt";
 import { loadCourseProgress, saveCourseProgress, type CourseProgress } from "./lib/progress";
 import {
@@ -65,18 +65,25 @@ function App() {
   // 实际渲染主题：偏好为 system 时跟随系统外观
   const resolvedTheme: ResolvedTheme = settings.theme === "system" ? systemTheme : settings.theme;
 
-  // 启动时加载课程库与设置，并读取各课程文件夹内的进度文件
+  // 启动时加载课程库与设置，读取各课程的进度文件，并同步清单声明的课程名
   useEffect(() => {
     void (async () => {
       const [storedCourses, storedSettings] = await Promise.all([loadCourses(), loadSettings()]);
+      let renamed = false;
       for (const course of storedCourses) {
-        if (course.rootDir) {
-          progressRef.current.set(course.id, await loadCourseProgress(course.rootDir));
+        if (!course.rootDir) continue;
+        progressRef.current.set(course.id, await loadCourseProgress(course.rootDir));
+        // 关键节点：清单是课程名的事实来源，历史导入的文件夹名展示随之更新
+        const manifestName = await readManifestName(course.rootDir).catch(() => null);
+        if (manifestName && manifestName !== course.name) {
+          course.name = manifestName;
+          renamed = true;
         }
       }
       setCourses(applyProgress(storedCourses, progressRef.current));
       setSettings({ ...DEFAULT_SETTINGS, ...storedSettings });
       setLoaded(true);
+      if (renamed) void saveCourses(storedCourses);
     })();
   }, []);
 

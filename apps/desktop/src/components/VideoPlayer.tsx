@@ -65,7 +65,8 @@ export function VideoPlayer(props: VideoPlayerProps) {
   };
 
   /**
-   * 元数据加载完成：恢复续播位置；无续播记录时轻移到首帧渲染封面
+   * 首帧数据就绪（loadeddata）：恢复续播位置。
+   * 封面由 preload="auto" + 首帧解码自然呈现，无需额外 seek
    */
   const restorePosition = () => {
     const el = videoRef.current;
@@ -73,9 +74,6 @@ export function VideoPlayer(props: VideoPlayerProps) {
     const saved = getSavedPosition(active.path);
     if (saved > 1 && saved < el.duration - 3) {
       el.currentTime = saved;
-    } else {
-      // 关键节点：微小 seek 触发首帧解码，避免黑屏封面
-      el.currentTime = 0.001;
     }
   };
 
@@ -137,8 +135,8 @@ export function VideoPlayer(props: VideoPlayerProps) {
             src={mediaSrc(active.path)}
             controls
             playsInline
-            preload="metadata"
-            onLoadedMetadata={restorePosition}
+            preload="auto"
+            onLoadedData={restorePosition}
             onPlay={() => withVideo(engineControl.startSynced)}
             onPause={() => {
               engineControl.stopFromMedia();

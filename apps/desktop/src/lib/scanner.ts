@@ -71,6 +71,27 @@ export async function scanCourseFolder(rootDir: string, type: CourseType): Promi
 }
 
 /**
+ * 轻量读取课程清单中声明的课程名（不解析课节，供启动时同步展示名）
+ *
+ * @param rootDir 课程根文件夹绝对路径
+ * @returns 清单声明的课程名；无清单或未声明时返回 null
+ */
+export async function readManifestName(rootDir: string): Promise<string | null> {
+  for (const candidate of [MANIFEST_FILENAME, LEGACY_MANIFEST_FILENAME]) {
+    const manifestPath = joinPath(rootDir, candidate);
+    try {
+      if (await exists(manifestPath)) {
+        const data = JSON.parse(await readTextFile(manifestPath)) as { name?: unknown };
+        return typeof data.name === "string" && data.name.trim() ? data.name.trim() : null;
+      }
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+/**
  * 校验并写入课节清单到课程数据目录（.learninghouse/manifest.json）。
  * 供"AI 整理结果贴回导入"使用：先解析校验，不合法时抛错并不落盘。
  *

@@ -3,23 +3,13 @@
  *
  * 位于主区与工具栏之间的横向控制条，播放当前课节的音频资源，
  * 多个音频时提供下拉切换；提供进度拖动、倍速、循环与音量控制，
- * 并把媒体事件转发给节拍器实现"跟随伴奏"联动。
+ * 并把媒体事件转发给节拍器实现"跟随音频"联动。
  */
 import { useEffect, useState, type RefObject } from "react";
 import { Checkbox, IconButton, Select, Slider } from "@learning-house/ui";
 import { mediaSrc } from "../lib/platform";
 import type { MediaEngineControl } from "../hooks/useMetronome";
 import type { LessonResource } from "../types";
-import { panelTitle } from "../styles/layout.css";
-import {
-  audioBar,
-  audioName,
-  audioProgress,
-  audioTag,
-  audioTime,
-  controlGroup,
-  controlLabel,
-} from "./audiobar.css";
 import { RateGroup } from "./RateGroup";
 
 interface AudioPlayerBarProps {
@@ -123,7 +113,7 @@ export function AudioPlayerBar(props: AudioPlayerBarProps) {
   if (!active) return null;
 
   return (
-    <div className={audioBar}>
+    <div className="flex h-[46px] shrink-0 items-center gap-2 overflow-x-auto border-t border-border bg-secondary/60 px-3.5">
       <audio
         key={active.path}
         ref={audioRef}
@@ -153,28 +143,24 @@ export function AudioPlayerBar(props: AudioPlayerBarProps) {
         }}
       />
 
-      <span className={audioTag}>音频</span>
+      <span className="shrink-0 rounded border border-primary px-1.5 py-px text-xs font-semibold text-primary">
+        音频
+      </span>
       <IconButton name={playing ? "pause" : "play"} label={playing ? "暂停" : "播放"} onClick={togglePlay} />
 
       {resources.length > 1 && (
         <Select
-          value={activeIndex}
-          onChange={(e) => setActiveIndex(Number(e.target.value))}
+          value={String(activeIndex)}
+          onChange={(v) => setActiveIndex(Number(v))}
+          options={resources.map((res, i) => ({ value: String(i), label: res.name }))}
+          className="max-w-45"
           title="切换音频"
-          maxWidth="180px"
-        >
-          {resources.map((res, i) => (
-            <option key={res.path} value={i}>
-              {res.name}
-            </option>
-          ))}
-        </Select>
+        />
       )}
 
-      <span className={audioTime}>{formatTime(currentTime)}</span>
+      <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{formatTime(currentTime)}</span>
       <Slider
-        className={audioProgress}
-        width="100%"
+        className="w-auto min-w-30 flex-1"
         min={0}
         max={duration || 0}
         step={0.01}
@@ -182,19 +168,19 @@ export function AudioPlayerBar(props: AudioPlayerBarProps) {
         onChange={seekTo}
         aria-label="播放进度"
       />
-      <span className={audioTime}>{formatTime(duration)}</span>
+      <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{formatTime(duration)}</span>
 
       <RateGroup value={rate} onChange={changeRate} />
 
       <Checkbox checked={loop} onChange={setLoop} label="循环" title="播放到结尾自动从头循环" />
 
-      <div className={controlGroup}>
-        <span className={controlLabel}>音量</span>
-        <Slider min={0} max={1} step={0.05} value={volume} onChange={changeVolume} width="90px" aria-label="音量" />
+      <div className="flex shrink-0 items-center gap-2">
+        <span className="text-xs text-muted-foreground">音量</span>
+        <Slider min={0} max={1} step={0.05} value={volume} onChange={changeVolume} className="w-[90px]" aria-label="音量" />
       </div>
 
       {resources.length === 1 && (
-        <span className={`${panelTitle} ${audioName}`} title={active.name}>
+        <span className="min-w-0 max-w-50 truncate text-xs text-muted-foreground" title={active.name}>
           {active.name}
         </span>
       )}

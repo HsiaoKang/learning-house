@@ -2,33 +2,26 @@
  * Learning House 应用根组件
  *
  * 负责视图路由（课程库 / 上课页）、课程库与设置的加载持久化、
- * 主题 class 挂载与切换。
+ * 主题切换（.dark 类挂载）与页面过渡动效。
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
-import { darkThemeClass, IconButton, lightThemeClass } from "@learning-house/ui";
+import { AnimatePresence, motion } from "motion/react";
+import { IconButton } from "@learning-house/ui";
 import { LibraryPage } from "./pages/LibraryPage";
 import { ClassroomPage } from "./pages/ClassroomPage";
-import { readDirTree, scanCourseFolder } from "./lib/scanner";
+import { readDirTree, scanCourseFolder, writeManifest } from "./lib/scanner";
 import { buildOrganizePrompt } from "./lib/aiPrompt";
+import { loadCourseProgress, saveCourseProgress, type CourseProgress } from "./lib/progress";
 import {
   DEFAULT_SETTINGS,
+  bumpUsageCounter,
   loadCourses,
-  loadPlaybackPositions,
   loadSettings,
   saveCourses,
-  savePlaybackPosition,
   saveSettings,
-  type PlaybackPositions,
 } from "./lib/storage";
 import type { AppSettings, Course, CourseType, ResolvedTheme, ThemeKind } from "./types";
-import { appLoading } from "./styles/layout.css";
-
-/** 实际主题到 vanilla-extract 主题 class 的映射 */
-const THEME_CLASSES: Record<ResolvedTheme, string> = {
-  dark: darkThemeClass,
-  light: lightThemeClass,
-};
 
 /** 主题偏好的循环切换顺序 */
 const THEME_CYCLE: Record<ThemeKind, ThemeKind> = {
@@ -65,31 +58,40 @@ function App() {
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [activeCourseId, setActiveCourseId] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
-  const positionsRef = useRef<PlaybackPositions>({});
+  /** 课程 id -> 进度（完成课节 + 续播位置），持久化在课程文件夹内 */
+  const progressRef = useRef<Map<string, CourseProgress>>(new Map());
   const systemTheme = useSystemTheme();
 
   // 实际渲染主题：偏好为 system 时跟随系统外观
   const resolvedTheme: ResolvedTheme = settings.theme === "system" ? systemTheme : settings.theme;
 
-  // 启动时加载课程库、设置与续播位置
+  // 启动时加载课程库与设置，并读取各课程文件夹内的进度文件
   useEffect(() => {
-    void Promise.all([loadCourses(), loadSettings(), loadPlaybackPositions()]).then(
-      ([storedCourses, storedSettings, positions]) => {
-        setCourses(storedCourses);
-        // 旧版本设置缺省字段用默认值补齐
-        setSettings({ ...DEFAULT_SETTINGS, ...storedSettings });
-        positionsRef.current = positions;
-        setLoaded(true);
-      },
-    );
+    void (async () => {
+      const [storedCourses, storedSettings] = await Promise.all([loadCourses(), loadSettings()]);
+      for (const course of storedCourses) {
+        if (course.rootDir) {
+          progressRef.current.set(course.id, await loadCourseProgress(course.rootDir));
+        }
+      }
+      setCourses(applyProgress(storedCourses, progressRef.current));
+      setSettings({ ...DEFAULT_SETTINGS, ...storedSettings });
+      setLoaded(true);
+    })();
   }, []);
 
-  // 关键节点：把实际主题 class 挂到根元素，token 变量随之切换
+  // 关键节点：暗色时给根元素挂 .dark 类，shadcn CSS 变量随之切换
   useEffect(() => {
-    const el = document.documentElement;
-    el.classList.remove(...Object.values(THEME_CLASSES));
-    el.classList.add(THEME_CLASSES[resolvedTheme]);
+    document.documentElement.classList.toggle("dark", resolvedTheme === "dark");
   }, [resolvedTheme]);
+
+  // 生产环境屏蔽 WebView 原生右键菜单（视频区有自定义菜单；开发保留以便审查元素）
+  useEffect(() => {
+    if (!import.meta.env.PROD) return;
+    const onContextMenu = (e: MouseEvent) => e.preventDefault();
+    window.addEventListener("contextmenu", onContextMenu);
+    return () => window.removeEventListener("contextmenu", onContextMenu);
+  }, []);
 
   /**
    * 更新课程库并持久化
@@ -105,7 +107,7 @@ function App() {
   }, []);
 
   /**
-   * 从文件夹导入课程：弹目录选择器 -> 扫描 -> 加入课程库
+   * 从文件夹导入课程：弹目录选择器 -> 扫描 -> 加入课程库并读取进度
    *
    * @param type 课程类型
    */
@@ -113,41 +115,69 @@ function App() {
     async (type: CourseType) => {
       const selected = await open({ directory: true, multiple: false, title: "选择课程根文件夹" });
       if (typeof selected !== "string") return;
-      let course: Course;
-      try {
-        course = await scanCourseFolder(selected, type);
-      } catch (e) {
-        // 关键节点：清单文件解析失败时把具体原因反馈给用户
-        alert(`导入失败：${e instanceof Error ? e.message : e}`);
-        return;
-      }
+      const course = await scanCourseFolder(selected, type).catch((e: unknown) => {
+        alert(String(e instanceof Error ? e.message : e));
+        return null;
+      });
+      if (!course) return;
       if (course.lessons.length === 0) {
         alert("该文件夹内没有识别到可用资源（视频/音频/图片/PDF/Guitar Pro）。");
         return;
       }
-      updateCourses((prev) => [...prev, course]);
+      const progress = await loadCourseProgress(selected);
+      progressRef.current.set(course.id, progress);
+      updateCourses((prev) => [...prev, ...applyProgress([course], progressRef.current)]);
     },
     [updateCourses],
   );
 
   /**
-   * 选择文件夹并生成 AI 整理提示词（文件清单 + 清单格式说明）
+   * 选择文件夹并生成 AI 整理提示词
    *
-   * @returns 提示词文本；取消选择或无可用资源时返回 null
+   * @returns 提示词与目标文件夹，取消或无资源时返回 null
    */
-  const generateAiPrompt = useCallback(async (): Promise<string | null> => {
-    const selected = await open({ directory: true, multiple: false, title: "选择要整理的课程根文件夹" });
+  const generateAiPrompt = useCallback(async (): Promise<{ prompt: string; rootDir: string } | null> => {
+    const selected = await open({ directory: true, multiple: false, title: "选择要整理的课程文件夹" });
     if (typeof selected !== "string") return null;
-    const prompt = buildOrganizePrompt(await readDirTree(selected, 0));
+    const tree = await readDirTree(selected, 0);
+    const prompt = buildOrganizePrompt(tree);
     if (!prompt) {
-      alert("该文件夹内没有识别到可用资源（视频/音频/图片/PDF/Guitar Pro）。");
+      alert("该文件夹内没有识别到可用资源。");
       return null;
     }
-    return prompt;
+    return { prompt, rootDir: selected };
   }, []);
 
   /**
-   * 重新扫描课程根文件夹，保留同名课节的完成状态
+   * 接收用户贴回的 AI 清单 JSON：写入课程文件夹并直接按清单导入
+   *
+   * @param rootDir 课程根文件夹
+   * @param type 课程类型
+   * @param manifestJson AI 返回的清单 JSON 文本
+   */
+  const importByPastedManifest = useCallback(
+    async (rootDir: string, type: CourseType, manifestJson: string) => {
+      try {
+        await writeManifest(rootDir, manifestJson);
+        const course = await scanCourseFolder(rootDir, type);
+        if (course.lessons.length === 0) {
+          alert("清单未匹配到任何有效资源，请检查 AI 输出的路径是否与文件一致。");
+          return false;
+        }
+        const progress = await loadCourseProgress(rootDir);
+        progressRef.current.set(course.id, progress);
+        updateCourses((prev) => [...prev, ...applyProgress([course], progressRef.current)]);
+        return true;
+      } catch (e) {
+        alert(String(e instanceof Error ? e.message : e));
+        return false;
+      }
+    },
+    [updateCourses],
+  );
+
+  /**
+   * 重新扫描课程根文件夹，进度按课节名从进度文件继承
    *
    * @param id 课程 id
    */
@@ -155,59 +185,98 @@ function App() {
     async (id: string) => {
       const target = courses.find((c) => c.id === id);
       if (!target?.rootDir) return;
-      let fresh: Course;
-      try {
-        fresh = await scanCourseFolder(target.rootDir, target.type);
-      } catch (e) {
-        alert(`重新扫描失败：${e instanceof Error ? e.message : e}`);
-        return;
-      }
+      const fresh = await scanCourseFolder(target.rootDir, target.type).catch((e: unknown) => {
+        alert(String(e instanceof Error ? e.message : e));
+        return null;
+      });
+      if (!fresh) return;
+      const progress = progressRef.current.get(id) ?? (await loadCourseProgress(target.rootDir));
+      progressRef.current.set(id, progress);
       updateCourses((prev) =>
-        prev.map((c) => {
-          if (c.id !== id) return c;
-          // 关键节点：按课节名继承旧的完成状态
-          const completedNames = new Set(c.lessons.filter((l) => l.completed).map((l) => l.name));
-          return {
-            ...c,
-            lessons: fresh.lessons.map((l) => ({ ...l, completed: completedNames.has(l.name) })),
-          };
-        }),
+        prev.map((c) =>
+          c.id === id
+            ? applyProgress([{ ...fresh, id: c.id, createdAt: c.createdAt }], new Map([[c.id, progress]]))[0]
+            : c,
+        ),
       );
     },
     [courses, updateCourses],
   );
 
   /**
-   * 从课程库删除课程（不动磁盘文件）
+   * 从课程库删除课程（不动磁盘文件与进度文件）
    *
    * @param id 课程 id
    */
   const deleteCourse = useCallback(
     (id: string) => {
       updateCourses((prev) => prev.filter((c) => c.id !== id));
+      progressRef.current.delete(id);
       if (activeCourseId === id) setActiveCourseId(null);
     },
     [updateCourses, activeCourseId],
   );
 
   /**
-   * 更新课节完成状态
+   * 更新课节完成状态：更新内存课程 + 写课程文件夹进度文件
    *
    * @param courseId 课程 id
-   * @param lessonId 课节 id
+   * @param lessonName 课节名（进度文件以课节名为键，重扫后仍稳定）
    * @param completed 是否完成
    */
   const setLessonCompleted = useCallback(
-    (courseId: string, lessonId: string, completed: boolean) => {
+    (courseId: string, lessonName: string, completed: boolean) => {
       updateCourses((prev) =>
         prev.map((c) =>
           c.id === courseId
-            ? { ...c, lessons: c.lessons.map((l) => (l.id === lessonId ? { ...l, completed } : l)) }
+            ? { ...c, lessons: c.lessons.map((l) => (l.name === lessonName ? { ...l, completed } : l)) }
             : c,
         ),
       );
+      const course = courses.find((c) => c.id === courseId);
+      const progress = progressRef.current.get(courseId) ?? { completedLessons: [], playback: {} };
+      const set = new Set(progress.completedLessons);
+      if (completed) set.add(lessonName);
+      else set.delete(lessonName);
+      progress.completedLessons = [...set];
+      progressRef.current.set(courseId, progress);
+      if (course?.rootDir) void saveCourseProgress(course.rootDir, progress);
     },
-    [updateCourses],
+    [courses, updateCourses],
+  );
+
+  /**
+   * 保存资源续播位置到课程进度文件（调用方已节流）
+   *
+   * @param courseId 课程 id
+   * @param resourcePath 资源绝对路径
+   * @param position 位置（秒）
+   */
+  const savePosition = useCallback(
+    (courseId: string, resourcePath: string, position: number) => {
+      const course = courses.find((c) => c.id === courseId);
+      if (!course?.rootDir) return;
+      const progress = progressRef.current.get(courseId) ?? { completedLessons: [], playback: {} };
+      progress.playback[relativeTo(course.rootDir, resourcePath)] = Math.round(position * 10) / 10;
+      progressRef.current.set(courseId, progress);
+      void saveCourseProgress(course.rootDir, progress);
+    },
+    [courses],
+  );
+
+  /**
+   * 查询资源续播位置
+   *
+   * @param courseId 课程 id
+   * @param resourcePath 资源绝对路径
+   */
+  const getSavedPosition = useCallback(
+    (courseId: string, resourcePath: string): number => {
+      const course = courses.find((c) => c.id === courseId);
+      if (!course?.rootDir) return 0;
+      return progressRef.current.get(courseId)?.playback[relativeTo(course.rootDir, resourcePath)] ?? 0;
+    },
+    [courses],
   );
 
   /**
@@ -223,19 +292,8 @@ function App() {
     });
   }, []);
 
-  /**
-   * 保存资源续播位置
-   *
-   * @param path 资源路径
-   * @param position 位置（秒）
-   */
-  const savePosition = useCallback((path: string, position: number) => {
-    positionsRef.current[path] = position;
-    void savePlaybackPosition(path, position);
-  }, []);
-
   if (!loaded) {
-    return <div className={appLoading}>加载中…</div>;
+    return <div className="flex h-screen items-center justify-center text-muted-foreground">加载中…</div>;
   }
 
   // 主题切换按钮：三态循环 跟随系统 -> 亮色 -> 暗色，两个页面顶栏共用
@@ -250,32 +308,80 @@ function App() {
 
   const activeCourse = courses.find((c) => c.id === activeCourseId) ?? null;
 
-  if (activeCourse) {
-    return (
-      <ClassroomPage
-        course={activeCourse}
-        onBack={() => setActiveCourseId(null)}
-        onLessonCompletedChange={(lessonId, completed) => setLessonCompleted(activeCourse.id, lessonId, completed)}
-        settings={settings}
-        onSettingsChange={updateSettings}
-        playbackPositions={positionsRef.current}
-        onSavePosition={savePosition}
-        themeToggle={themeToggle}
-      />
-    );
-  }
-
   return (
-    <LibraryPage
-      courses={courses}
-      onOpenCourse={setActiveCourseId}
-      onImportFolder={(type) => void importFolder(type)}
-      onGenerateAiPrompt={generateAiPrompt}
-      onRescanCourse={(id) => void rescanCourse(id)}
-      onDeleteCourse={deleteCourse}
-      themeToggle={themeToggle}
-    />
+    <AnimatePresence mode="wait">
+      {activeCourse ? (
+        <motion.div
+          key={`classroom-${activeCourse.id}`}
+          className="h-screen"
+          initial={{ opacity: 0, scale: 0.985 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 1.01 }}
+          transition={{ duration: 0.18, ease: "easeOut" }}
+        >
+          <ClassroomPage
+            course={activeCourse}
+            onBack={() => setActiveCourseId(null)}
+            onLessonCompletedChange={(lessonName, completed) =>
+              setLessonCompleted(activeCourse.id, lessonName, completed)
+            }
+            settings={settings}
+            onSettingsChange={updateSettings}
+            getSavedPosition={(path) => getSavedPosition(activeCourse.id, path)}
+            onSavePosition={(path, pos) => savePosition(activeCourse.id, path, pos)}
+            onNextLessonUsed={() => void bumpUsageCounter("nextLessonClicks")}
+            themeToggle={themeToggle}
+          />
+        </motion.div>
+      ) : (
+        <motion.div
+          key="library"
+          className="h-screen"
+          initial={{ opacity: 0, scale: 0.985 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 1.01 }}
+          transition={{ duration: 0.18, ease: "easeOut" }}
+        >
+          <LibraryPage
+            courses={courses}
+            onOpenCourse={setActiveCourseId}
+            onImportFolder={(type) => void importFolder(type)}
+            onGenerateAiPrompt={generateAiPrompt}
+            onImportByPastedManifest={importByPastedManifest}
+            onRescanCourse={(id) => void rescanCourse(id)}
+            onDeleteCourse={deleteCourse}
+            themeToggle={themeToggle}
+          />
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
+}
+
+/**
+ * 把进度（完成课节名单）套用到课程列表
+ *
+ * @param list 课程列表
+ * @param progressMap 课程 id -> 进度
+ */
+function applyProgress(list: Course[], progressMap: Map<string, CourseProgress>): Course[] {
+  return list.map((course) => {
+    const progress = progressMap.get(course.id);
+    if (!progress) return course;
+    const completed = new Set(progress.completedLessons);
+    return { ...course, lessons: course.lessons.map((l) => ({ ...l, completed: completed.has(l.name) })) };
+  });
+}
+
+/**
+ * 计算资源相对课程根目录的路径（进度文件用相对路径，课程文件夹可整体搬迁）
+ *
+ * @param rootDir 课程根目录
+ * @param absPath 资源绝对路径
+ */
+function relativeTo(rootDir: string, absPath: string): string {
+  const prefix = rootDir.endsWith("/") ? rootDir : `${rootDir}/`;
+  return absPath.startsWith(prefix) ? absPath.slice(prefix.length) : absPath;
 }
 
 export default App;

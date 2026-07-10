@@ -2,11 +2,10 @@
  * 空态占位
  */
 import type { ReactNode } from "react";
-import { emptyHint, emptyIcon, emptyRoot } from "./empty.css";
-import { Icon, type IconName } from "./Icon";
+import { Icon, type IconName } from "./icon";
 
 export interface EmptyStateProps {
-  /** 顶部图标名（用大号渲染） */
+  /** 顶部图标名（大号渲染） */
   icon?: IconName;
   /** 主文案 */
   title: ReactNode;
@@ -19,19 +18,19 @@ export interface EmptyStateProps {
 /**
  * 空态组件
  *
- * @param props 见 EmptyStateProps 字段说明
+ * @param props icon 图标；title 主文案；hint 辅助说明；children 操作区
  */
 export function EmptyState({ icon, title, hint, children }: EmptyStateProps) {
   return (
-    <div className={emptyRoot}>
+    <div className="flex h-full flex-col items-center justify-center gap-3 p-5 text-center text-sm text-muted-foreground">
       {icon && (
-        <span className={emptyIcon}>
+        <span className="inline-flex opacity-40">
           <Icon name={icon} size="xl" />
         </span>
       )}
       <p>{title}</p>
       {children}
-      {hint && <p className={emptyHint}>{hint}</p>}
+      {hint && <p className="text-xs opacity-60">{hint}</p>}
     </div>
   );
 }

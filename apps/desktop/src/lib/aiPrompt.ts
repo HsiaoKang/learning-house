@@ -1,10 +1,10 @@
 /**
  * AI 整理提示词生成
  *
- * 把课程文件夹的文件清单和课节清单(learning-house.json)的格式约定
- * 组装成一段完整提示词,用户复制后粘贴给任意 AI(ChatGPT/豆包/Kimi 等),
- * 将 AI 返回的 JSON 保存到课程根目录即可按清单导入。
- * 全程无需上传任何数据到本项目的服务器,保持 local-first。
+ * 把课程文件夹的文件清单和课节清单的格式约定组装成一段完整提示词，
+ * 用户复制后粘贴给任意 AI（ChatGPT/豆包/Kimi 等），再把 AI 返回的
+ * JSON 粘贴回应用即可导入（清单由应用代写到课程数据目录）。
+ * 全程无需上传任何数据到本项目的服务器，保持 local-first。
  */
 import { resourceKindOf } from "../types";
 import type { DirNode } from "./heuristic";

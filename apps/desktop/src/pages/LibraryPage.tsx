@@ -1,31 +1,22 @@
 /**
  * 课程库页
  *
- * 应用首页：课程卡片列表（含学习进度），支持从文件夹导入课程
- * （默认整理规则：子文件夹归纳为课节）、重新扫描、删除课程。
+ * 应用首页：课程卡片列表（含学习进度），支持从文件夹导入课程、
+ * AI 整理（提示词生成 + 结果贴回直接导入）、重新扫描、删除课程。
  */
 import { useState } from "react";
-import { BrandLogo, Button, EmptyState, IconButton, Modal, ProgressBar } from "@learning-house/ui";
-import { COURSE_TYPE_LABELS, type Course, type CourseType } from "../types";
-import { brand, brandName, topBar } from "../styles/layout.css";
+import { motion } from "motion/react";
 import {
-  aiPromptEntry,
-  aiPromptFooter,
-  aiPromptTextarea,
-  courseCard,
-  courseCardActions,
-  courseCardHead,
-  courseGrid,
-  courseMeta,
-  courseName,
-  courseProgressLabel,
-  courseTypeTag,
-  importActions,
-  importHint,
-  importTypeBtn,
-  libraryBody,
-} from "./library.css";
-import { appShell } from "../styles/layout.css";
+  BrandLogo,
+  Button,
+  EmptyState,
+  Icon,
+  IconButton,
+  Modal,
+  ProgressBar,
+  cn,
+} from "@learning-house/ui";
+import { COURSE_TYPE_LABELS, type Course, type CourseType } from "../types";
 
 interface LibraryPageProps {
   courses: Course[];
@@ -34,12 +25,14 @@ interface LibraryPageProps {
   /** 选择文件夹导入课程（type 为课程类型） */
   onImportFolder: (type: CourseType) => void;
   /** 选择文件夹并生成 AI 整理提示词（取消选择时返回 null） */
-  onGenerateAiPrompt: () => Promise<string | null>;
+  onGenerateAiPrompt: () => Promise<{ prompt: string; rootDir: string } | null>;
+  /** 用户贴回 AI 清单后写入并导入，返回是否成功 */
+  onImportByPastedManifest: (rootDir: string, type: CourseType, manifestJson: string) => Promise<boolean>;
   /** 重新扫描课程根文件夹（保留完成状态） */
-  onRescanCourse: (id: string) => void;
+  onRescanCourse: (id: string) => void | Promise<void>;
   /** 删除课程（仅移出课程库，不动磁盘文件） */
   onDeleteCourse: (id: string) => void;
-  /** 主题切换按钮（由 App 注入，含图标与行为） */
+  /** 主题切换按钮（由 App 注入） */
   themeToggle: React.ReactNode;
 }
 
@@ -56,50 +49,68 @@ function progressOf(course: Course): { done: number; total: number } {
 }
 
 /**
- * 复制文本到剪贴板
- *
- * @param text 待复制文本
- * @returns 是否复制成功（失败时由调用方引导手动复制）
- */
-async function copyToClipboard(text: string): Promise<boolean> {
-  try {
-    await navigator.clipboard.writeText(text);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/**
  * 课程库页组件
  *
  * @param props 见 LibraryPageProps 字段说明
  */
 export function LibraryPage(props: LibraryPageProps) {
-  const { courses, onOpenCourse, onImportFolder, onGenerateAiPrompt, onRescanCourse, onDeleteCourse, themeToggle } =
-    props;
+  const {
+    courses,
+    onOpenCourse,
+    onImportFolder,
+    onGenerateAiPrompt,
+    onImportByPastedManifest,
+    onRescanCourse,
+    onDeleteCourse,
+    themeToggle,
+  } = props;
   const [importOpen, setImportOpen] = useState(false);
-  const [aiPrompt, setAiPrompt] = useState<string | null>(null);
+  /** AI 整理会话（提示词 + 目标文件夹 + 用户贴回的结果） */
+  const [aiSession, setAiSession] = useState<{ prompt: string; rootDir: string } | null>(null);
+  const [pasted, setPasted] = useState("");
   const [copied, setCopied] = useState(false);
+  const [importing, setImporting] = useState(false);
+  /** 正在重新扫描的课程 id（刷新图标旋转） */
+  const [rescanningId, setRescanningId] = useState<string | null>(null);
 
-  /** 选文件夹生成 AI 提示词并打开展示弹窗 */
+  /** 选文件夹生成 AI 提示词并打开弹窗 */
   const openAiPrompt = async () => {
     setImportOpen(false);
-    const prompt = await onGenerateAiPrompt();
-    if (prompt) {
+    const session = await onGenerateAiPrompt();
+    if (session) {
       setCopied(false);
-      setAiPrompt(prompt);
+      setPasted("");
+      setAiSession(session);
+    }
+  };
+
+  /** 贴回的清单提交导入 */
+  const submitPasted = async () => {
+    if (!aiSession || !pasted.trim()) return;
+    setImporting(true);
+    const ok = await onImportByPastedManifest(aiSession.rootDir, "general", pasted);
+    setImporting(false);
+    if (ok) setAiSession(null);
+  };
+
+  /** 触发重扫并维持旋转态 */
+  const rescan = async (id: string) => {
+    setRescanningId(id);
+    try {
+      await onRescanCourse(id);
+    } finally {
+      setRescanningId(null);
     }
   };
 
   return (
-    <div className={appShell}>
-      <header className={topBar}>
-        <div className={brand}>
+    <div className="flex h-full flex-col">
+      <header className="flex h-12 shrink-0 items-center justify-between border-b border-border bg-card px-3.5">
+        <div className="flex items-center gap-2 text-primary">
           <BrandLogo />
-          <span className={brandName}>Learning House</span>
+          <span className="text-[15px] font-bold tracking-wide">Learning House</span>
         </div>
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <div className="flex items-center gap-2">
           {themeToggle}
           <Button variant="primary" icon="plus" onClick={() => setImportOpen(true)}>
             导入课程文件夹
@@ -107,7 +118,7 @@ export function LibraryPage(props: LibraryPageProps) {
         </div>
       </header>
 
-      <main className={libraryBody}>
+      <main className="min-h-0 flex-1 overflow-y-auto p-5">
         {courses.length === 0 ? (
           <EmptyState
             icon="folderOpen"
@@ -119,29 +130,49 @@ export function LibraryPage(props: LibraryPageProps) {
             </Button>
           </EmptyState>
         ) : (
-          <div className={courseGrid}>
-            {courses.map((course) => {
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-4">
+            {courses.map((course, i) => {
               const { done, total } = progressOf(course);
               const percent = total > 0 ? Math.round((done / total) * 100) : 0;
               return (
-                <div key={course.id} className={courseCard} onClick={() => onOpenCourse(course.id)}>
-                  <div className={courseCardHead}>
-                    <span className={courseName} title={course.name}>
+                <motion.div
+                  key={course.id}
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.25, delay: i * 0.04, ease: "easeOut" }}
+                  whileHover={{ y: -3 }}
+                  onClick={() => onOpenCourse(course.id)}
+                  className="flex cursor-pointer flex-col gap-2.5 rounded-lg border border-border bg-card p-4 transition-[border-color,box-shadow] hover:border-primary/60 hover:shadow-lg"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="truncate text-[15px] font-semibold" title={course.name}>
                       {course.name}
                     </span>
-                    <span className={courseTypeTag}>{COURSE_TYPE_LABELS[course.type]}</span>
+                    <span className="shrink-0 rounded border border-primary px-1.5 py-px text-[11px] text-primary">
+                      {COURSE_TYPE_LABELS[course.type]}
+                    </span>
                   </div>
-                  <div className={courseMeta}>
+                  {course.rootDir && (
+                    <div className="truncate text-[11px] text-muted-foreground/70" title={course.rootDir}>
+                      {course.rootDir}
+                    </div>
+                  )}
+                  <div className="text-xs text-muted-foreground">
                     {total} 课节 · 已完成 {done} 节
                   </div>
                   <ProgressBar percent={percent} />
-                  <div className={courseProgressLabel}>{percent}%</div>
-                  <div className={courseCardActions} onClick={(e) => e.stopPropagation()}>
+                  <div className="text-right text-[11px] text-muted-foreground">{percent}%</div>
+                  <div
+                    className="flex justify-end gap-1.5 border-t border-border pt-2.5"
+                    onClick={(e) => e.stopPropagation()}
+                  >
                     {course.rootDir && (
                       <IconButton
                         name="rescan"
                         label="按文件夹重新扫描课节"
-                        onClick={() => onRescanCourse(course.id)}
+                        disabled={rescanningId === course.id}
+                        className={cn(rescanningId === course.id && "[&_svg]:animate-spin")}
+                        onClick={() => void rescan(course.id)}
                       />
                     )}
                     <IconButton
@@ -154,24 +185,24 @@ export function LibraryPage(props: LibraryPageProps) {
                       }}
                     />
                   </div>
-                </div>
+                </motion.div>
               );
             })}
           </div>
         )}
       </main>
 
-      <Modal open={importOpen} onClose={() => setImportOpen(false)} title="导入课程" width="360px">
-        <p className={importHint}>
-          选择课程类型后挑选课程根文件夹。子文件夹自动归纳为课节；平铺编号视频的文件夹会按编号
-          与配套资料自动组课；根文件夹内有 learning-house.json 清单时优先按清单组课。
+      <Modal open={importOpen} onClose={() => setImportOpen(false)} title="导入课程" widthClassName="w-[380px]">
+        <p className="text-[13px] leading-relaxed text-muted-foreground">
+          选择课程类型后挑选课程根文件夹。子文件夹自动归纳为课节；平铺编号视频会按编号与配套资料自动组课；
+          文件夹内已有课节清单时优先按清单组课。
         </p>
-        <div className={importActions}>
+        <div className="flex gap-2.5">
           {(Object.keys(COURSE_TYPE_LABELS) as CourseType[]).map((type) => (
             <Button
               key={type}
               variant="primary"
-              className={importTypeBtn}
+              className="flex-1"
               onClick={() => {
                 setImportOpen(false);
                 onImportFolder(type);
@@ -181,37 +212,56 @@ export function LibraryPage(props: LibraryPageProps) {
             </Button>
           ))}
         </div>
-        <div className={aiPromptEntry}>
-          <p className={importHint}>目录太乱、自动整理不理想？可以让任意 AI 帮你生成课节清单。</p>
+        <div className="flex flex-col gap-2 border-t border-border pt-3">
+          <p className="text-[13px] text-muted-foreground">目录太乱、自动整理不理想？可以让任意 AI 帮你生成课节清单。</p>
           <Button variant="ghost" onClick={() => void openAiPrompt()}>
-            生成 AI 整理提示词
+            <Icon name="sparkles" size="sm" />
+            AI 整理
           </Button>
         </div>
       </Modal>
 
-      <Modal open={aiPrompt !== null} onClose={() => setAiPrompt(null)} title="AI 整理提示词" width="560px">
-        <p className={importHint}>
-          把下面的提示词完整发给任意 AI（ChatGPT / 豆包 / Kimi…），将它回复的 JSON 保存为课程根文件夹下的
-          learning-house.json 文件，再回来导入该文件夹即可。
-        </p>
-        <textarea
-          className={aiPromptTextarea}
-          readOnly
-          value={aiPrompt ?? ""}
-          onFocus={(e) => e.currentTarget.select()}
-        />
-        <div className={aiPromptFooter}>
-          <Button
-            variant="primary"
-            onClick={() => {
-              void copyToClipboard(aiPrompt ?? "").then((ok) => {
-                setCopied(ok);
-                if (!ok) alert("复制失败，请点击文本框全选后手动复制。");
-              });
-            }}
-          >
-            {copied ? "已复制" : "复制提示词"}
-          </Button>
+      <Modal open={aiSession !== null} onClose={() => setAiSession(null)} title="AI 整理" widthClassName="w-[600px]">
+        <div className="flex flex-col gap-2">
+          <p className="text-[13px] leading-relaxed text-muted-foreground">
+            第一步：复制提示词发给任意 AI（ChatGPT / 豆包 / Kimi…）
+          </p>
+          <textarea
+            readOnly
+            value={aiSession?.prompt ?? ""}
+            onFocus={(e) => e.currentTarget.select()}
+            className="h-28 w-full resize-none rounded-md border border-border bg-secondary p-2 font-mono text-xs text-foreground focus-visible:outline-2 focus-visible:outline-ring"
+          />
+          <div>
+            <Button
+              variant="solid"
+              size="sm"
+              onClick={() => {
+                void navigator.clipboard
+                  .writeText(aiSession?.prompt ?? "")
+                  .then(() => setCopied(true))
+                  .catch(() => alert("复制失败，请点击文本框全选后手动复制。"));
+              }}
+            >
+              {copied ? "已复制 ✓" : "复制提示词"}
+            </Button>
+          </div>
+        </div>
+        <div className="flex flex-col gap-2">
+          <p className="text-[13px] leading-relaxed text-muted-foreground">
+            第二步：把 AI 回复的 JSON 直接粘贴到这里（无需手动建文件）
+          </p>
+          <textarea
+            value={pasted}
+            onChange={(e) => setPasted(e.target.value)}
+            placeholder='{"name": "...", "lessons": [...]}'
+            className="h-36 w-full resize-none rounded-md border border-border bg-secondary p-2 font-mono text-xs text-foreground placeholder:text-muted-foreground/50 focus-visible:outline-2 focus-visible:outline-ring"
+          />
+          <div className="flex justify-end">
+            <Button variant="primary" disabled={!pasted.trim() || importing} onClick={() => void submitPasted()}>
+              {importing ? "导入中…" : "校验并导入"}
+            </Button>
+          </div>
         </div>
       </Modal>
     </div>

@@ -1,17 +1,19 @@
 /**
  * 上课页
  *
- * 单个课程的学习界面：顶栏课节切换与完成标记，
- * 主区左视频右文档（可在设置中调换），音频播放条，底部工具栏。
+ * 顶栏：课节下拉即页面标题 + "下一节"快捷按钮（简洁原则），
+ * 主区左视频右文档（可调换），音频播放条，底部工具栏。
+ * 全局媒体快捷键：空格播停、左右快进退、上下音量。
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Button, Checkbox, EmptyState, IconButton, Select } from "@learning-house/ui";
+import { Checkbox, EmptyState, IconButton, Select } from "@learning-house/ui";
 import { SplitPane } from "../components/SplitPane";
 import { VideoPlayer } from "../components/VideoPlayer";
 import { AudioPlayerBar } from "../components/AudioPlayerBar";
 import { DocViewer } from "../components/DocViewer";
 import { ToolBar } from "../components/ToolBar";
 import { useMetronome } from "../hooks/useMetronome";
+import { useMediaShortcuts } from "../hooks/useMediaShortcuts";
 import {
   DEFAULT_TOOL_BY_COURSE_TYPE,
   isDocKind,
@@ -19,24 +21,23 @@ import {
   type Course,
   type ToolKind,
 } from "../types";
-import type { PlaybackPositions } from "../lib/storage";
-import { appShell, mainArea, panelTitle, topBar } from "../styles/layout.css";
-import { classroomLeft, classroomRight, courseTitle, lessonSwitcher } from "./classroom.css";
 
 interface ClassroomPageProps {
   course: Course;
   /** 返回课程库 */
   onBack: () => void;
-  /** 课节完成状态变化（由外层持久化） */
-  onLessonCompletedChange: (lessonId: string, completed: boolean) => void;
+  /** 课节完成状态变化（lessonName 为键，由外层持久化到课程文件夹） */
+  onLessonCompletedChange: (lessonName: string, completed: boolean) => void;
   /** 应用设置 */
   settings: AppSettings;
   /** 更新应用设置（由外层持久化） */
   onSettingsChange: (patch: Partial<AppSettings>) => void;
-  /** 初始续播位置表 */
-  playbackPositions: PlaybackPositions;
-  /** 持久化某资源的续播位置 */
-  onSavePosition: (path: string, position: number) => void;
+  /** 查询资源续播位置（秒） */
+  getSavedPosition: (resourcePath: string) => number;
+  /** 持久化资源续播位置 */
+  onSavePosition: (resourcePath: string, position: number) => void;
+  /** "下一节"按钮使用计数（本地统计，决定功能去留） */
+  onNextLessonUsed: () => void;
   /** 主题切换按钮（由 App 注入） */
   themeToggle: React.ReactNode;
 }
@@ -53,15 +54,15 @@ export function ClassroomPage(props: ClassroomPageProps) {
     onLessonCompletedChange,
     settings,
     onSettingsChange,
-    playbackPositions,
+    getSavedPosition,
     onSavePosition,
+    onNextLessonUsed,
     themeToggle,
   } = props;
   const [lessonIndex, setLessonIndex] = useState(0);
   const [tool, setTool] = useState<ToolKind>(DEFAULT_TOOL_BY_COURSE_TYPE[course.type]);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const positionsRef = useRef<PlaybackPositions>(playbackPositions);
   const metronome = useMetronome();
 
   // 课程切换时重置课节与默认工具
@@ -81,21 +82,9 @@ export function ClassroomPage(props: ClassroomPageProps) {
   const videoControl = useMemo(() => metronome.bindSource("video"), [metronome.bindSource]);
   const audioControl = useMemo(() => metronome.bindSource("audio"), [metronome.bindSource]);
 
-  /**
-   * 查询资源续播位置
-   */
-  const getSavedPosition = useCallback((path: string) => positionsRef.current[path] ?? 0, []);
-
-  /**
-   * 保存资源续播位置（内存即时更新 + 外层持久化）
-   */
-  const savePosition = useCallback(
-    (path: string, position: number) => {
-      positionsRef.current[path] = position;
-      onSavePosition(path, position);
-    },
-    [onSavePosition],
-  );
+  // 快捷键绑定到主媒体：有视频用视频，否则用音频
+  const primaryMediaRef = videoResources.length > 0 ? videoRef : audioRef;
+  useMediaShortcuts(primaryMediaRef);
 
   /**
    * 读取当前联动源媒体的播放位置（秒），无联动源时返回 null
@@ -106,21 +95,12 @@ export function ClassroomPage(props: ClassroomPageProps) {
     return null;
   }, [metronome.sync.source]);
 
-  /**
-   * 切换到相邻课节
-   *
-   * @param delta 偏移量（-1 上一节 / +1 下一节）
-   */
-  const stepLesson = (delta: number) => {
-    setLessonIndex((i) => Math.min(course.lessons.length - 1, Math.max(0, i + delta)));
-  };
-
   if (!lesson) {
     return (
-      <div className={appShell}>
-        <header className={topBar}>
+      <div className="flex h-full flex-col">
+        <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border bg-card px-3.5">
           <IconButton name="back" label="返回课程库" onClick={onBack} />
-          <span className={panelTitle}>{course.name}</span>
+          <span className="text-[13px] text-muted-foreground">{course.name}</span>
         </header>
         <EmptyState title="该课程没有课节，请在课程库重新扫描或检查文件夹内容。" />
       </div>
@@ -133,46 +113,41 @@ export function ClassroomPage(props: ClassroomPageProps) {
       videoRef={videoRef}
       engineControl={videoControl}
       getSavedPosition={getSavedPosition}
-      onPositionSave={savePosition}
+      onPositionSave={onSavePosition}
     />
   );
   const docPane = <DocViewer resources={docResources} />;
 
   return (
-    <div className={appShell}>
-      <header className={topBar}>
-        <div className={classroomLeft}>
-          <IconButton name="back" label="返回课程库" onClick={onBack} />
-          <span className={courseTitle} title={course.name}>
-            {course.name}
-          </span>
-        </div>
+    <div className="flex h-full flex-col">
+      <header className="flex h-12 shrink-0 items-center gap-2.5 border-b border-border bg-card px-3.5">
+        <IconButton name="back" label="返回课程库" onClick={onBack} />
 
-        <div className={lessonSwitcher}>
-          <Button variant="ghost" size="sm" disabled={lessonIndex === 0} onClick={() => stepLesson(-1)}>
-            上一节
-          </Button>
-          <Select value={lessonIndex} onChange={(e) => setLessonIndex(Number(e.target.value))} maxWidth="280px">
-            {course.lessons.map((l, i) => (
-              <option key={l.id} value={i}>
-                {`${i + 1}. ${l.name}${l.completed ? " ✓" : ""}`}
-              </option>
-            ))}
-          </Select>
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={lessonIndex >= course.lessons.length - 1}
-            onClick={() => stepLesson(1)}
-          >
-            下一节
-          </Button>
-        </div>
+        {/* 课节下拉即页面标题（课节名自带编号时不再重复加序号） */}
+        <Select
+          value={String(lessonIndex)}
+          onChange={(v) => setLessonIndex(Number(v))}
+          options={course.lessons.map((l, i) => ({
+            value: String(i),
+            label: `${/^\s*\d+[.\-、·]/.test(l.name) ? "" : `${i + 1}. `}${l.name}${l.completed ? " ✓" : ""}`,
+          }))}
+          className="max-w-[46vw] font-medium"
+          title={course.name}
+        />
+        <IconButton
+          name="chevronRight"
+          label="下一节"
+          disabled={lessonIndex >= course.lessons.length - 1}
+          onClick={() => {
+            onNextLessonUsed();
+            setLessonIndex((i) => Math.min(course.lessons.length - 1, i + 1));
+          }}
+        />
 
-        <div className={classroomRight}>
+        <div className="flex flex-1 items-center justify-end gap-3">
           <Checkbox
             checked={lesson.completed}
-            onChange={(completed) => onLessonCompletedChange(lesson.id, completed)}
+            onChange={(completed) => onLessonCompletedChange(lesson.name, completed)}
             label="已完成"
             title="标记本课节的学习进度"
           />
@@ -185,7 +160,7 @@ export function ClassroomPage(props: ClassroomPageProps) {
         </div>
       </header>
 
-      <main className={mainArea}>
+      <main className="min-h-0 flex-1">
         <SplitPane
           left={settings.swapPanes ? docPane : videoPane}
           right={settings.swapPanes ? videoPane : docPane}

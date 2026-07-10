@@ -1,44 +1,40 @@
 /**
- * 滑块（自绘 range 控件）
- *
- * 保留原生 input[type=range] 的拖拽/键盘/无障碍行为，
- * 外观完全自绘：轨道渐变表现进度，thumb 统一圆点。
+ * 滑块（Radix Slider：精准拖拽 + 键盘步进 + 跨端一致外观）
  */
-import type { CSSProperties, InputHTMLAttributes } from "react";
-import { assignInlineVars } from "@vanilla-extract/dynamic";
-import { cx } from "../cx";
-import { fillVar, slider } from "./slider.css";
+import { forwardRef, type ComponentPropsWithoutRef, type ComponentRef } from "react";
+import * as SliderPrimitive from "@radix-ui/react-slider";
+import { cn } from "../lib/utils";
 
 export interface SliderProps
-  extends Omit<InputHTMLAttributes<HTMLInputElement>, "type" | "value" | "min" | "max" | "step" | "onChange"> {
+  extends Omit<
+    ComponentPropsWithoutRef<typeof SliderPrimitive.Root>,
+    "value" | "defaultValue" | "onValueChange" | "onChange"
+  > {
+  /** 当前值（受控） */
   value: number;
-  min: number;
-  max: number;
-  step?: number;
-  /** 数值变化回调（已转为 number） */
+  /** 数值变化回调 */
   onChange: (value: number) => void;
-  /** 轨道宽度（如 "140px" / "100%"），默认 140px */
-  width?: CSSProperties["width"];
 }
 
 /**
- * 滑块组件
+ * 单值滑块
  *
- * @param props 见 SliderProps 字段说明
+ * @param props value 当前值；onChange 变化回调；min/max/step 同 Radix
  */
-export function Slider({ value, min, max, step, onChange, width = "140px", className, style, ...rest }: SliderProps) {
-  const percent = max > min ? ((value - min) / (max - min)) * 100 : 0;
-  return (
-    <input
-      type="range"
-      className={cx(slider, className)}
-      value={value}
-      min={min}
-      max={max}
-      step={step}
-      onChange={(e) => onChange(Number(e.target.value))}
-      style={{ width, ...assignInlineVars({ [fillVar]: `${percent}%` }), ...style }}
-      {...rest}
-    />
-  );
-}
+export const Slider = forwardRef<ComponentRef<typeof SliderPrimitive.Root>, SliderProps>(
+  ({ className, value, onChange, ...props }, ref) => (
+    <SliderPrimitive.Root
+      ref={ref}
+      value={[value]}
+      onValueChange={(values) => onChange(values[0] ?? value)}
+      className={cn("relative flex w-35 touch-none select-none items-center py-1.5", className)}
+      {...props}
+    >
+      <SliderPrimitive.Track className="relative h-1 w-full grow overflow-hidden rounded-full bg-secondary">
+        <SliderPrimitive.Range className="absolute h-full bg-primary" />
+      </SliderPrimitive.Track>
+      <SliderPrimitive.Thumb className="block size-3.5 rounded-full bg-primary transition-transform hover:scale-115 focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-1 disabled:pointer-events-none" />
+    </SliderPrimitive.Root>
+  ),
+);
+Slider.displayName = "Slider";

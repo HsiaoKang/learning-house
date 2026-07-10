@@ -4,7 +4,6 @@
  * 中间分隔条可拖拽调整左右面板宽度比例。
  */
 import { useCallback, useRef, useState, type ReactNode } from "react";
-import { splitDivider, splitLeft, splitPane, splitRight } from "./splitpane.css";
 
 interface SplitPaneProps {
   left: ReactNode;
@@ -43,12 +42,15 @@ export function SplitPane({ left, right, initialRatio = 0.55 }: SplitPaneProps) 
   }, []);
 
   return (
-    <div className={splitPane} ref={containerRef}>
-      <div className={splitLeft} style={{ flexBasis: `${ratio * 100}%` }}>
+    <div className="flex h-full" ref={containerRef}>
+      <div className="min-w-0 shrink-0" style={{ flexBasis: `${ratio * 100}%` }}>
         {left}
       </div>
-      <div className={splitDivider} onPointerDown={onDividerPointerDown} />
-      <div className={splitRight}>{right}</div>
+      <div
+        className="w-[5px] shrink-0 cursor-col-resize bg-border transition-colors hover:bg-primary"
+        onPointerDown={onDividerPointerDown}
+      />
+      <div className="min-w-0 flex-1">{right}</div>
     </div>
   );
 }

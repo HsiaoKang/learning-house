@@ -12,7 +12,7 @@
  *    - 根文件夹下的散落文件归纳为一个"未分组"课节
  *    - 无任何子文件夹时，整个根文件夹视为单课节课程
  */
-import { exists, readDir, readTextFile } from "@tauri-apps/plugin-fs";
+import { exists, mkdir, readDir, readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
 import {
   basename,
   genId,
@@ -23,12 +23,14 @@ import {
   type LessonResource,
 } from "../types";
 import { buildHeuristicLessons, type DirNode, type HeuristicLesson } from "./heuristic";
+import { COURSE_DATA_DIR } from "./progress";
 
 /** 扫描的最大目录深度（相对根目录），防止误选巨大目录 */
 const MAX_DEPTH = 4;
 
-/** 课节清单文件名（放在课程根文件夹下） */
-export const MANIFEST_FILENAME = "learning-house.json";
+/** 课节清单文件路径（课程数据目录内）；根目录 learning-house.json 为旧版兼容位置 */
+export const MANIFEST_FILENAME = `${COURSE_DATA_DIR}/manifest.json`;
+const LEGACY_MANIFEST_FILENAME = "learning-house.json";
 
 /** 清单中的一个课节声明 */
 interface ManifestLesson {
@@ -55,14 +57,38 @@ interface CourseManifest {
  * @returns 生成的课程（可能包含空课节列表，由调用方决定如何提示）
  */
 export async function scanCourseFolder(rootDir: string, type: CourseType): Promise<Course> {
-  const manifestPath = joinPath(rootDir, MANIFEST_FILENAME);
-  if (await exists(manifestPath)) {
-    return scanByManifest(rootDir, type, manifestPath);
+  // 清单查找顺序：.learninghouse/manifest.json > 旧版根目录 learning-house.json
+  for (const candidate of [MANIFEST_FILENAME, LEGACY_MANIFEST_FILENAME]) {
+    const manifestPath = joinPath(rootDir, candidate);
+    if (await exists(manifestPath)) {
+      return scanByManifest(rootDir, type, manifestPath);
+    }
   }
   const tree = await readDirTree(rootDir, 0);
   const heuristic = buildHeuristicLessons(tree);
   const lessons = heuristic ? lessonsFromHeuristic(rootDir, heuristic) : lessonsByDefaultRule(rootDir, tree);
   return { id: genId(), name: rootNameOf(rootDir), type, rootDir, lessons, createdAt: Date.now() };
+}
+
+/**
+ * 校验并写入课节清单到课程数据目录（.learninghouse/manifest.json）。
+ * 供"AI 整理结果贴回导入"使用：先解析校验，不合法时抛错并不落盘。
+ *
+ * @param rootDir 课程根文件夹绝对路径
+ * @param manifestJson 清单 JSON 文本（允许带 AI 常见的 markdown 代码块包裹）
+ */
+export async function writeManifest(rootDir: string, manifestJson: string): Promise<void> {
+  // 容忍 AI 输出常见的 ```json ... ``` 包裹
+  const cleaned = manifestJson
+    .trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/, "");
+  const manifest = parseManifest(cleaned);
+  const dataDir = joinPath(rootDir, COURSE_DATA_DIR);
+  if (!(await exists(dataDir))) {
+    await mkdir(dataDir, { recursive: true });
+  }
+  await writeTextFile(joinPath(rootDir, MANIFEST_FILENAME), JSON.stringify(manifest, null, 2));
 }
 
 /**

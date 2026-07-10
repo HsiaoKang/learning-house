@@ -1,11 +1,10 @@
 /**
- * 复选框（自绘勾选框）
- *
- * 原生 input 视觉隐藏保留可访问性，勾选框与对勾统一绘制。
+ * 复选框（Radix Checkbox + 文字标签）
  */
-import type { ReactNode } from "react";
-import { checkboxBox, checkboxInput, checkboxLabel } from "./checkbox.css";
-import { Icon } from "./Icon";
+import { forwardRef, type ComponentRef, type ReactNode } from "react";
+import * as CheckboxPrimitive from "@radix-ui/react-checkbox";
+import { cn } from "../lib/utils";
+import { Icon } from "./icon";
 
 export interface CheckboxProps {
   checked: boolean;
@@ -15,27 +14,37 @@ export interface CheckboxProps {
   label?: ReactNode;
   disabled?: boolean;
   title?: string;
+  className?: string;
 }
 
 /**
  * 复选框组件
  *
- * @param props 见 CheckboxProps 字段说明
+ * @param props checked/onChange 受控勾选；label 文案
  */
-export function Checkbox({ checked, onChange, label, disabled, title }: CheckboxProps) {
-  return (
-    <label className={checkboxLabel} data-disabled={disabled ? "true" : undefined} title={title}>
-      <input
-        type="checkbox"
-        className={checkboxInput}
+export const Checkbox = forwardRef<ComponentRef<typeof CheckboxPrimitive.Root>, CheckboxProps>(
+  ({ checked, onChange, label, disabled, title, className }, ref) => (
+    <label
+      title={title}
+      className={cn(
+        "inline-flex cursor-pointer select-none items-center gap-1.5 whitespace-nowrap text-[13px]",
+        disabled && "cursor-not-allowed opacity-45",
+        className,
+      )}
+    >
+      <CheckboxPrimitive.Root
+        ref={ref}
         checked={checked}
         disabled={disabled}
-        onChange={(e) => onChange(e.target.checked)}
-      />
-      <span className={checkboxBox}>
-        <Icon name="check" size="sm" />
-      </span>
+        onCheckedChange={(state) => onChange(state === true)}
+        className="flex size-4 shrink-0 items-center justify-center rounded-sm border border-border bg-secondary transition-colors data-[state=checked]:border-primary data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground focus-visible:outline-2 focus-visible:outline-ring"
+      >
+        <CheckboxPrimitive.Indicator>
+          <Icon name="check" size="sm" />
+        </CheckboxPrimitive.Indicator>
+      </CheckboxPrimitive.Root>
       {label}
     </label>
-  );
-}
+  ),
+);
+Checkbox.displayName = "Checkbox";

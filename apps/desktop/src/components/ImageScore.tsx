@@ -6,7 +6,6 @@
  * 原始尺寸下超出部分由外层滚动容器承载。
  */
 import { useEffect, useState } from "react";
-import { scoreImage, scoreScroll } from "./docviewer.css";
 
 interface ImageScoreProps {
   /** asset 协议图片 URL */
@@ -27,9 +26,9 @@ export function ImageScore({ src }: ImageScoreProps) {
   }, [src]);
 
   return (
-    <div className={scoreScroll}>
+    <div className="min-h-0 flex-1 overflow-auto p-3">
       <img
-        className={scoreImage}
+        className="mx-auto block rounded"
         src={src}
         style={{ width: fitWidth ? "100%" : "auto", cursor: fitWidth ? "zoom-in" : "zoom-out" }}
         onDoubleClick={() => setFitWidth((f) => !f)}

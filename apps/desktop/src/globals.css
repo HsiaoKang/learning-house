@@ -1,0 +1,143 @@
+/**
+ * Tailwind v4 入口 + shadcn 主题变量 + 全局基座
+ *
+ * 主题：琥珀色系映射到 shadcn 语义变量，:root 为亮色，.dark 为暗色，
+ * 三态（system/light/dark）切换逻辑在 App.tsx（挂/摘 .dark 类）。
+ */
+@import "tailwindcss";
+@import "tw-animate-css";
+
+/* 扫描 workspace ui 包源码（pnpm 符号链接位于 node_modules，默认被排除） */
+@source "../../../packages/ui/src";
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --background: #f2f3f5;
+  --foreground: #22262b;
+  --card: #ffffff;
+  --card-foreground: #22262b;
+  --popover: #ffffff;
+  --popover-foreground: #22262b;
+  --primary: #c07a16;
+  --primary-strong: #a3670f;
+  --primary-foreground: #ffffff;
+  --secondary: #e9ecef;
+  --secondary-foreground: #22262b;
+  --muted: #e9ecef;
+  --muted-foreground: #647080;
+  --accent: #e9ecef;
+  --accent-foreground: #22262b;
+  --destructive: #d1242f;
+  --destructive-foreground: #ffffff;
+  --border: #d5dae0;
+  --input: #d5dae0;
+  --ring: #c07a16;
+  --radius: 0.5rem;
+  /* 应用专属扩展 */
+  --paper: #ffffff;
+  --stage: #14161a;
+  --scroll-thumb: #c4cbd3;
+}
+
+.dark {
+  --background: #121417;
+  --foreground: #e6e8ea;
+  --card: #1b1f24;
+  --card-foreground: #e6e8ea;
+  --popover: #1b1f24;
+  --popover-foreground: #e6e8ea;
+  --primary: #e8a44c;
+  --primary-strong: #f2b866;
+  --primary-foreground: #1a1409;
+  --secondary: #22272e;
+  --secondary-foreground: #e6e8ea;
+  --muted: #22272e;
+  --muted-foreground: #9aa4af;
+  --accent: #22272e;
+  --accent-foreground: #e6e8ea;
+  --destructive: #e5534b;
+  --destructive-foreground: #ffffff;
+  --border: #2d333b;
+  --input: #2d333b;
+  --ring: #e8a44c;
+  --paper: #ffffff;
+  --stage: #000000;
+  --scroll-thumb: #3a424c;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-strong: var(--primary-strong);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-paper: var(--paper);
+  --color-stage: var(--stage);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --font-sans: -apple-system, "PingFang SC", "Microsoft YaHei", "Segoe UI", "Noto Sans CJK SC",
+    "Helvetica Neue", system-ui, sans-serif;
+}
+
+/* ===== 全局基座（跨端一致性） ===== */
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans overflow-hidden select-none antialiased;
+    font-size: 14px;
+  }
+
+  button {
+    cursor: pointer;
+  }
+
+  :focus-visible {
+    @apply outline-2 outline-ring outline-offset-1;
+  }
+
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--scroll-thumb);
+    border-radius: 4px;
+  }
+
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
+  img,
+  video {
+    display: block;
+  }
+}

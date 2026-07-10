@@ -1,26 +1,19 @@
 /**
  * @learning-house/ui 包入口
  *
- * 设计系统：主题 token 契约、暗/亮主题、全局样式、
- * 跨端一致的基础组件与统一图标。
+ * shadcn 风格设计系统：Radix primitives + Tailwind v4 + CVA，
+ * 主题由 CSS 变量驱动（apps/desktop/src/globals.css）。
  */
-// 主题
-export { vars } from "./theme/contract.css";
-export { darkThemeClass } from "./theme/dark.css";
-export { lightThemeClass } from "./theme/light.css";
-import "./theme/global.css";
+export { cn } from "./lib/utils";
 
-// 工具
-export { cx } from "./cx";
-
-// 组件
-export { Button, IconButton, type ButtonProps, type IconButtonProps } from "./components/Button";
-export { Slider, type SliderProps } from "./components/Slider";
-export { Select, type SelectProps } from "./components/Select";
-export { Checkbox, type CheckboxProps } from "./components/Checkbox";
-export { Tabs, type TabItem, type TabsProps } from "./components/Tabs";
-export { Modal, type ModalProps } from "./components/Modal";
-export { ProgressBar, type ProgressBarProps } from "./components/ProgressBar";
-export { EmptyState, type EmptyStateProps } from "./components/EmptyState";
-export { Icon, type IconName, type IconProps } from "./components/Icon";
-export { BrandLogo } from "./components/BrandLogo";
+export { Button, IconButton, type ButtonProps, type IconButtonProps } from "./components/button";
+export { Slider, type SliderProps } from "./components/slider";
+export { Select, type SelectOption, type SelectProps } from "./components/select";
+export { Checkbox, type CheckboxProps } from "./components/checkbox";
+export { Modal, type ModalProps } from "./components/dialog";
+export { ProgressBar, type ProgressBarProps } from "./components/progress";
+export { Tabs, type TabItem, type TabsProps } from "./components/tabs";
+export { EmptyState, type EmptyStateProps } from "./components/empty-state";
+export { ContextMenu, type ContextMenuItem, type ContextMenuProps } from "./components/context-menu";
+export { Icon, type IconName, type IconProps } from "./components/icon";
+export { BrandLogo } from "./components/brand-logo";

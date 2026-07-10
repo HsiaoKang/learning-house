@@ -11,7 +11,6 @@ import { EmptyState } from "@learning-house/ui";
 import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
 import type { PDFDocumentLoadingTask, PDFDocumentProxy } from "pdfjs-dist";
 import pdfWorkerUrl from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
-import { pdfPageCanvas, pdfPages, scoreScroll } from "./docviewer.css";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
@@ -86,7 +85,7 @@ export function PdfScore({ data }: PdfScoreProps) {
   if (error) {
     return <EmptyState title={`PDF 加载失败：${error}`} />;
   }
-  return <div className={`${scoreScroll} ${pdfPages}`} ref={containerRef} />;
+  return <div className="flex min-h-0 flex-1 flex-col items-center gap-3 overflow-auto p-3" ref={containerRef} />;
 }
 
 /**
@@ -115,7 +114,7 @@ async function renderAllPages(
     const viewport = page.getViewport({ scale: cssScale * dpr });
 
     const canvas = document.createElement("canvas");
-    canvas.className = pdfPageCanvas;
+    canvas.className = "block rounded shadow-md";
     canvas.width = Math.floor(viewport.width);
     canvas.height = Math.floor(viewport.height);
     canvas.style.width = `${Math.floor(viewport.width / dpr)}px`;

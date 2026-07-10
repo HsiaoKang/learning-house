@@ -1,13 +1,12 @@
 /**
  * Tap Tempo 浮窗
  *
- * 点击 TAP 后弹出的浮层：通过鼠标点击大按钮或敲击空格键打拍，
- * 实时计算并显示 BPM（取最近 8 次间隔平均，超过 2 秒未击打自动重新计数），
+ * 通过鼠标点击大按钮或敲击空格键打拍，实时计算并显示 BPM
+ * （取最近 8 次间隔平均，超过 2 秒未击打自动重新计数），
  * 可一键把结果应用到节拍器。
  */
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Button, Modal } from "@learning-house/ui";
-import { bpmDisplay, bpmHint, bpmUnit, bpmValue, tapActions, tapCount, tapFooter, tapPad } from "./tap.css";
+import { Button, Modal, cn } from "@learning-house/ui";
 
 /** 判定重新计数的静默间隔（毫秒） */
 const RESET_GAP_MS = 2000;
@@ -64,7 +63,7 @@ export function TapTempoModal({ open, onClose, onApply }: TapTempoModalProps) {
     setTaps(0);
   }, []);
 
-  // 浮窗打开期间监听空格键打拍、Esc 关闭；关闭时清空记录
+  // 浮窗打开期间监听空格键打拍；关闭时清空记录（Esc 由 Dialog 处理）
   useEffect(() => {
     if (!open) {
       reset();
@@ -74,34 +73,38 @@ export function TapTempoModal({ open, onClose, onApply }: TapTempoModalProps) {
       if (e.code === "Space") {
         e.preventDefault();
         if (!e.repeat) tap();
-      } else if (e.code === "Escape") {
-        onClose();
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [open, tap, reset, onClose]);
+  }, [open, tap, reset]);
 
   return (
     <Modal open={open} onClose={onClose} title="Tap Tempo">
-      <div className={bpmDisplay}>
+      <div className="flex min-h-16 items-baseline justify-center gap-2">
         {bpm !== null ? (
           <>
-            <span className={bpmValue}>{bpm}</span>
-            <span className={bpmUnit}>BPM</span>
+            <span className="text-[56px] font-bold leading-none tabular-nums text-primary">{bpm}</span>
+            <span className="text-sm text-muted-foreground">BPM</span>
           </>
         ) : (
-          <span className={bpmHint}>连续击打测速</span>
+          <span className="self-center text-sm text-muted-foreground">连续击打测速</span>
         )}
       </div>
 
-      <button className={tapPad} data-flash={flash ? "true" : undefined} onClick={tap}>
+      <button
+        onClick={tap}
+        className={cn(
+          "h-28 w-full select-none rounded-lg border-2 border-dashed border-border bg-secondary text-[15px] text-muted-foreground transition-colors hover:border-primary hover:text-foreground",
+          flash && "border-primary-strong bg-primary text-primary-foreground",
+        )}
+      >
         点击 或 敲空格
       </button>
 
-      <div className={tapFooter}>
-        <span className={tapCount}>{taps > 0 ? `已击打 ${taps} 次` : "\u00a0"}</span>
-        <div className={tapActions}>
+      <div className="flex items-center justify-between">
+        <span className="text-xs text-muted-foreground">{taps > 0 ? `已击打 ${taps} 次` : "\u00a0"}</span>
+        <div className="flex gap-2">
           <Button variant="ghost" onClick={reset}>
             重来
           </Button>

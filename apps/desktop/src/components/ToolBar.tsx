@@ -1,15 +1,14 @@
 /**
  * 底部工具栏
  *
- * 上课页底部的工具容器：左端提供工具切换器，右侧渲染当前工具面板。
- * 目前内置工具：节拍器；默认工具由课程类型决定（吉他 -> 节拍器）。
+ * 上课页底部的工具容器：左端工具切换器（无冗余文案），
+ * 右侧渲染当前工具面板。吉他类型课程默认带出节拍器。
  */
 import { Select } from "@learning-house/ui";
 import type { MetronomeOptions } from "@learning-house/metronome-core";
 import type { SyncConfig } from "../hooks/useMetronome";
 import type { ToolKind } from "../types";
 import { MetronomeBar } from "./MetronomeBar";
-import { toolBar, toolEmptyHint, toolLabel, toolPanel, toolSwitcher } from "./toolbar.css";
 
 /** 工具显示名 */
 const TOOL_LABELS: Record<ToolKind, string> = {
@@ -44,18 +43,19 @@ interface ToolBarProps {
  */
 export function ToolBar({ tool, onToolChange, metronome }: ToolBarProps) {
   return (
-    <div className={toolBar}>
-      <div className={toolSwitcher}>
-        <span className={toolLabel}>工具</span>
-        <Select value={tool} onChange={(e) => onToolChange(e.target.value as ToolKind)}>
-          {(Object.keys(TOOL_LABELS) as ToolKind[]).map((kind) => (
-            <option key={kind} value={kind}>
-              {TOOL_LABELS[kind]}
-            </option>
-          ))}
-        </Select>
+    <div className="flex shrink-0 items-center border-t border-border bg-card">
+      <div className="flex h-14 shrink-0 items-center border-r border-border px-3.5">
+        <Select
+          value={tool}
+          onChange={(v) => onToolChange(v as ToolKind)}
+          options={(Object.keys(TOOL_LABELS) as ToolKind[]).map((kind) => ({
+            value: kind,
+            label: TOOL_LABELS[kind],
+          }))}
+          title="切换练习工具"
+        />
       </div>
-      <div className={toolPanel}>
+      <div className="min-w-0 flex-1">
         {tool === "metronome" ? (
           <MetronomeBar
             options={metronome.options}
@@ -70,7 +70,7 @@ export function ToolBar({ tool, onToolChange, metronome }: ToolBarProps) {
             getMediaTime={metronome.getMediaTime}
           />
         ) : (
-          <span className={toolEmptyHint}>未启用工具</span>
+          <span className="block px-3.5 text-[13px] text-muted-foreground">未启用工具</span>
         )}
       </div>
     </div>

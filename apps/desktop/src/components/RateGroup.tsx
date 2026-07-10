@@ -1,7 +1,7 @@
 /**
- * 倍速档位按钮组（视频与音频共用）
+ * 倍速档位按钮组（音频播放条使用；视频用原生控制条的倍速菜单）
  */
-import { rateBtn, rateGroup } from "./videoplayer.css";
+import { cn } from "@learning-house/ui";
 
 /** 可选倍速档位（慢速练习是核心场景） */
 export const PLAYBACK_RATES = [0.5, 0.65, 0.75, 0.85, 1, 1.25, 1.5];
@@ -20,9 +20,16 @@ interface RateGroupProps {
  */
 export function RateGroup({ value, onChange }: RateGroupProps) {
   return (
-    <div className={rateGroup}>
+    <div className="flex shrink-0 gap-0.5">
       {PLAYBACK_RATES.map((rate) => (
-        <button key={rate} className={rateBtn} data-active={rate === value ? "true" : undefined} onClick={() => onChange(rate)}>
+        <button
+          key={rate}
+          onClick={() => onChange(rate)}
+          className={cn(
+            "rounded px-1.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground",
+            rate === value && "bg-primary font-semibold text-primary-foreground hover:bg-primary hover:text-primary-foreground",
+          )}
+        >
           {rate}x
         </button>
       ))}

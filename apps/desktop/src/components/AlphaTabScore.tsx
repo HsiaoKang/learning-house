@@ -8,7 +8,6 @@
 import { useEffect, useRef, useState } from "react";
 import { EmptyState } from "@learning-house/ui";
 import * as alphaTabLib from "@coderline/alphatab";
-import { alphaTabHost, scoreScroll } from "./docviewer.css";
 
 interface AlphaTabScoreProps {
   /** Guitar Pro 文件二进制内容 */
@@ -63,7 +62,7 @@ export function AlphaTabScore({ data }: AlphaTabScoreProps) {
     return <EmptyState title={`Guitar Pro 谱加载失败：${error}`} />;
   }
   return (
-    <div className={`${scoreScroll} ${alphaTabHost}`}>
+    <div className="min-h-0 flex-1 overflow-auto bg-paper p-3">
       <div ref={hostRef} />
     </div>
   );

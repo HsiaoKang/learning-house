@@ -1,33 +1,45 @@
 /**
- * 持久化存储层
+ * 应用级持久化存储
  *
- * Tauri 环境使用 tauri-plugin-store（应用数据目录 JSON 文件），
- * 纯浏览器环境（开发调试）降级为 localStorage，保证 UI 流程可独立验证。
+ * Tauri 环境使用 tauri-plugin-store（应用数据目录 JSON 文件，单例缓存），
+ * 纯浏览器环境（开发调试）降级为 localStorage。
  *
- * 存储内容：课程库、学习进度（视频续播位置）、应用设置。
+ * 存储内容：课程库（结构与引用）、应用设置、本地使用计数。
+ * 学习进度不在这里——它随课程文件夹存放（见 progress.ts）。
  */
 import type { AppSettings, Course } from "../types";
-
-/** 是否运行在 Tauri 窗口内 */
-const IS_TAURI = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+import { IS_TAURI } from "./platform";
 
 /** store 文件名（Tauri）/ localStorage key 前缀（浏览器） */
 const STORE_FILE = "learning-house.json";
 const KEY_COURSES = "courses";
 const KEY_SETTINGS = "settings";
-const KEY_PLAYBACK = "playbackPositions";
+const KEY_USAGE = "usageCounters";
 
 /** 默认设置（主题默认跟随系统外观） */
 export const DEFAULT_SETTINGS: AppSettings = { swapPanes: false, theme: "system" };
 
-/** 视频续播位置表：resourcePath -> 秒 */
-export type PlaybackPositions = Record<string, number>;
+/** 本地使用计数（不上报，仅用于产品决策时自查） */
+export type UsageCounters = Record<string, number>;
 
 type StoreShape = {
   [KEY_COURSES]: Course[];
   [KEY_SETTINGS]: AppSettings;
-  [KEY_PLAYBACK]: PlaybackPositions;
+  [KEY_USAGE]: UsageCounters;
 };
+
+/** Tauri store 实例单例（避免每次读写都重新加载文件） */
+let storePromise: Promise<import("@tauri-apps/plugin-store").Store> | null = null;
+
+/**
+ * 获取（惰性创建）store 单例
+ */
+function getStore() {
+  if (!storePromise) {
+    storePromise = import("@tauri-apps/plugin-store").then(({ load }) => load(STORE_FILE));
+  }
+  return storePromise;
+}
 
 /**
  * 读取一个存储键（内部统一入口）
@@ -37,10 +49,8 @@ type StoreShape = {
  */
 async function readKey<K extends keyof StoreShape>(key: K, fallback: StoreShape[K]): Promise<StoreShape[K]> {
   if (IS_TAURI) {
-    const { load } = await import("@tauri-apps/plugin-store");
-    const store = await load(STORE_FILE);
-    const value = await store.get<StoreShape[K]>(key);
-    return value ?? fallback;
+    const store = await getStore();
+    return (await store.get<StoreShape[K]>(key)) ?? fallback;
   }
   const raw = localStorage.getItem(`lh:${key}`);
   return raw ? (JSON.parse(raw) as StoreShape[K]) : fallback;
@@ -54,8 +64,7 @@ async function readKey<K extends keyof StoreShape>(key: K, fallback: StoreShape[
  */
 async function writeKey<K extends keyof StoreShape>(key: K, value: StoreShape[K]): Promise<void> {
   if (IS_TAURI) {
-    const { load } = await import("@tauri-apps/plugin-store");
-    const store = await load(STORE_FILE);
+    const store = await getStore();
     await store.set(key, value);
     await store.save();
     return;
@@ -96,20 +105,12 @@ export function saveSettings(settings: AppSettings): Promise<void> {
 }
 
 /**
- * 读取全部视频续播位置
- */
-export function loadPlaybackPositions(): Promise<PlaybackPositions> {
-  return readKey(KEY_PLAYBACK, {});
-}
-
-/**
- * 更新单个资源的续播位置（节流写盘由调用方控制）
+ * 本地使用计数 +1（如"下一节"按钮点击量，用于决定功能去留）
  *
- * @param path 资源路径
- * @param position 播放位置（秒）
+ * @param counter 计数器名
  */
-export async function savePlaybackPosition(path: string, position: number): Promise<void> {
-  const all = await loadPlaybackPositions();
-  all[path] = position;
-  await writeKey(KEY_PLAYBACK, all);
+export async function bumpUsageCounter(counter: string): Promise<void> {
+  const counters = await readKey(KEY_USAGE, {});
+  counters[counter] = (counters[counter] ?? 0) + 1;
+  await writeKey(KEY_USAGE, counters);
 }

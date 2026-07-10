@@ -1,24 +1,15 @@
 /**
  * 节拍器控制条
  *
- * 工具栏内的节拍器面板：启停、Tap 测速浮窗、BPM 调节、拍号、
- * 重音、音量、媒体联动开关与首拍偏移设置、拍点指示灯。
+ * 工具栏内的节拍器面板：启停、Tap 测速浮窗、BPM 调节（滑块 +
+ * 数字输入 + 滚轮微调）、拍号、重音、音量、媒体联动与拍点指示灯。
  */
 import { useState } from "react";
-import { Button, Checkbox, Select, Slider } from "@learning-house/ui";
+import { motion } from "motion/react";
+import { Button, Checkbox, Select, Slider, cn } from "@learning-house/ui";
 import type { MetronomeOptions } from "@learning-house/metronome-core";
 import type { SyncConfig, SyncSource } from "../hooks/useMetronome";
 import { TapTempoModal } from "./TapTempoModal";
-import {
-  beatDot,
-  beatLights,
-  bpmInput,
-  metroGroup,
-  metroLabel,
-  metronomeBar,
-  metroToggle,
-  offsetInput,
-} from "./metronome.css";
 
 /** 可选拍号（每小节拍数） */
 const BEATS_OPTIONS = [2, 3, 4, 6];
@@ -57,20 +48,16 @@ export function MetronomeBar(props: MetronomeBarProps) {
   };
 
   /**
-   * 计算拍点灯的命中状态标记
+   * 约束 BPM 到合法范围
    *
-   * @param index 灯序号
-   * @returns "accent" 重拍 / "true" 普通拍 / undefined 未命中
+   * @param value 原始值
    */
-  const hitStateOf = (index: number): "accent" | "true" | undefined => {
-    if (index !== activeBeat) return undefined;
-    return index === 0 && options.accentFirstBeat ? "accent" : "true";
-  };
+  const clampBpm = (value: number) => Math.min(300, Math.max(20, Math.round(value) || 20));
 
   return (
-    <div className={metronomeBar}>
+    <div className="flex h-14 items-center gap-3.5 overflow-x-auto px-3.5">
       <Button
-        className={metroToggle}
+        className="min-w-21"
         icon={running ? "stop" : "play"}
         active={running}
         onClick={toggle}
@@ -83,31 +70,33 @@ export function MetronomeBar(props: MetronomeBarProps) {
       </Button>
       <TapTempoModal open={tapOpen} onClose={() => setTapOpen(false)} onApply={(bpm) => updateOptions({ bpm })} />
 
-      <div className={metroGroup}>
+      <div
+        className="flex shrink-0 items-center gap-2"
+        onWheel={(e) => {
+          // 滚轮微调 BPM（±1）
+          e.preventDefault();
+          updateOptions({ bpm: clampBpm(options.bpm + (e.deltaY < 0 ? 1 : -1)) });
+        }}
+      >
         <Slider min={20} max={300} value={options.bpm} onChange={(bpm) => updateOptions({ bpm })} aria-label="BPM" />
         <input
-          className={bpmInput}
           type="number"
           min={20}
           max={300}
           value={options.bpm}
-          onChange={(e) => updateOptions({ bpm: Math.min(300, Math.max(20, Number(e.target.value) || 20)) })}
+          onChange={(e) => updateOptions({ bpm: clampBpm(Number(e.target.value)) })}
+          className="h-8 w-15 rounded-md border border-border bg-secondary text-center text-[13px] tabular-nums focus-visible:outline-2 focus-visible:outline-ring"
         />
-        <span className={metroLabel}>BPM</span>
+        <span className="text-xs text-muted-foreground">BPM</span>
       </div>
 
-      <div className={metroGroup}>
+      <div className="flex shrink-0 items-center gap-2">
         <Select
-          value={options.beatsPerBar}
-          onChange={(e) => updateOptions({ beatsPerBar: Number(e.target.value) })}
+          value={String(options.beatsPerBar)}
+          onChange={(v) => updateOptions({ beatsPerBar: Number(v) })}
+          options={BEATS_OPTIONS.map((n) => ({ value: String(n), label: `${n}/4` }))}
           title="拍号（每小节拍数）"
-        >
-          {BEATS_OPTIONS.map((n) => (
-            <option key={n} value={n}>
-              {n}/4
-            </option>
-          ))}
-        </Select>
+        />
         <Checkbox
           checked={options.accentFirstBeat}
           onChange={(accentFirstBeat) => updateOptions({ accentFirstBeat })}
@@ -115,46 +104,43 @@ export function MetronomeBar(props: MetronomeBarProps) {
         />
       </div>
 
-      <div className={metroGroup}>
-        <span className={metroLabel}>音量</span>
+      <div className="flex shrink-0 items-center gap-2">
+        <span className="text-xs text-muted-foreground">音量</span>
         <Slider
           min={0}
           max={1}
           step={0.05}
           value={options.volume}
           onChange={(volume) => updateOptions({ volume })}
-          width="90px"
+          className="w-[90px]"
           aria-label="节拍器音量"
         />
       </div>
 
-      <div className={metroGroup} data-disabled={!hasVideo && !hasAudio ? "true" : undefined}>
-        <span className={metroLabel}>联动</span>
+      <div className={cn("flex shrink-0 items-center gap-2", !hasVideo && !hasAudio && "opacity-45")}>
+        <span className="text-xs text-muted-foreground">联动</span>
         <Select
           value={sync.source}
           disabled={!hasVideo && !hasAudio}
-          onChange={(e) => setSync({ source: e.target.value as SyncSource })}
+          onChange={(v) => setSync({ source: v as SyncSource })}
+          options={[
+            { value: "none", label: "不联动" },
+            { value: "video", label: "跟随视频", disabled: !hasVideo },
+            { value: "audio", label: "跟随音频", disabled: !hasAudio },
+          ]}
           title="媒体播放时节拍器自动跟随其时间轴（含倍速缩放）"
-        >
-          <option value="none">不联动</option>
-          <option value="video" disabled={!hasVideo}>
-            跟随视频
-          </option>
-          <option value="audio" disabled={!hasAudio}>
-            跟随音频
-          </option>
-        </Select>
+        />
         {sync.source !== "none" && (
           <>
-            <span className={metroLabel}>首拍</span>
+            <span className="text-xs text-muted-foreground">首拍</span>
             <input
-              className={`${bpmInput} ${offsetInput}`}
               type="number"
               min={0}
               step={0.1}
               value={sync.firstBeatOffset}
               onChange={(e) => setSync({ firstBeatOffset: Math.max(0, Number(e.target.value) || 0) })}
               title="媒体里第一拍出现的秒数"
+              className="h-8 w-16 rounded-md border border-border bg-secondary text-center text-[13px] tabular-nums focus-visible:outline-2 focus-visible:outline-ring"
             />
             <Button variant="ghost" size="sm" onClick={captureOffsetFromMedia} title="把当前播放位置设为第一拍">
               取当前
@@ -163,10 +149,23 @@ export function MetronomeBar(props: MetronomeBarProps) {
         )}
       </div>
 
-      <div className={beatLights}>
-        {Array.from({ length: options.beatsPerBar }, (_, i) => (
-          <span key={i} className={beatDot} data-hit={hitStateOf(i)} />
-        ))}
+      <div className="ml-auto flex items-center gap-2 pr-1">
+        {Array.from({ length: options.beatsPerBar }, (_, i) => {
+          const hit = i === activeBeat;
+          const accent = hit && i === 0 && options.accentFirstBeat;
+          return (
+            <motion.span
+              key={i}
+              animate={hit ? { scale: 1.3 } : { scale: 1 }}
+              transition={{ duration: 0.08 }}
+              className={cn(
+                "size-3.5 rounded-full border border-border bg-secondary",
+                hit && !accent && "bg-foreground",
+                accent && "bg-primary shadow-[0_0_10px_var(--primary)]",
+              )}
+            />
+          );
+        })}
       </div>
     </div>
   );

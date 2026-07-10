@@ -9,8 +9,6 @@ import { useEffect, useState } from "react";
 import { EmptyState, Tabs } from "@learning-house/ui";
 import { mediaSrc, readBinary } from "../lib/platform";
 import type { LessonResource } from "../types";
-import { panelTitle, panelToolbar } from "../styles/layout.css";
-import { scoreViewer } from "./docviewer.css";
 import { ImageScore } from "./ImageScore";
 import { PdfScore } from "./PdfScore";
 import { AlphaTabScore } from "./AlphaTabScore";
@@ -60,8 +58,8 @@ export function DocViewer({ resources }: DocViewerProps) {
   }
 
   return (
-    <div className={scoreViewer}>
-      <div className={panelToolbar}>
+    <div className="flex h-full flex-col bg-secondary/40">
+      <div className="flex h-10 shrink-0 items-center gap-2 border-b border-border bg-card px-2">
         {resources.length > 1 ? (
           <Tabs
             items={resources.map((res) => ({ key: res.path, label: res.name }))}
@@ -69,7 +67,7 @@ export function DocViewer({ resources }: DocViewerProps) {
             onChange={(key) => setActiveIndex(resources.findIndex((r) => r.path === key))}
           />
         ) : (
-          <span className={panelTitle} title={active.name}>
+          <span className="min-w-0 flex-1 truncate text-[13px] text-muted-foreground" title={active.name}>
             {active.name}
           </span>
         )}

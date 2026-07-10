@@ -2,20 +2,27 @@
  * 课节视频播放器
  *
  * 播放当前课节内的视频资源（Tauri asset 协议访问本地文件），
- * 多个视频时提供 tab 切换；支持倍速、播放位置记忆（续播），
- * 并把媒体事件转发给节拍器实现"跟随视频"联动。
+ * 多个视频时提供 tab 切换；播放位置记忆（续播）、默认展示首帧封面、
+ * 自定义右键菜单，并把媒体事件转发给节拍器实现"跟随视频"联动。
+ * 倍速调节使用视频原生控制条（不再重复放置）。
  */
 import { useEffect, useRef, useState, type RefObject } from "react";
-import { EmptyState, Tabs } from "@learning-house/ui";
+import { ContextMenu, EmptyState, Tabs } from "@learning-house/ui";
 import { mediaSrc } from "../lib/platform";
 import type { MediaEngineControl } from "../hooks/useMetronome";
 import type { LessonResource } from "../types";
-import { panelTitle, panelToolbar } from "../styles/layout.css";
-import { videoEl, videoPlayer, videoStage } from "./videoplayer.css";
-import { RateGroup } from "./RateGroup";
 
 /** 续播位置保存节流间隔（毫秒） */
 const POSITION_SAVE_INTERVAL_MS = 3000;
+
+/** 右键菜单项 */
+const VIDEO_MENU_ITEMS = [
+  { key: "toggle", label: "播放 / 暂停", icon: "play" as const },
+  { key: "back30", label: "后退 30 秒", icon: "back" as const },
+  { key: "fwd30", label: "前进 30 秒", icon: "chevronDown" as const },
+  { key: "sep", label: "", separator: true },
+  { key: "mute", label: "静音 / 取消静音", icon: "music" as const },
+];
 
 interface VideoPlayerProps {
   /** 当前课节的视频资源列表（可为空） */
@@ -38,13 +45,11 @@ interface VideoPlayerProps {
 export function VideoPlayer(props: VideoPlayerProps) {
   const { resources, videoRef, engineControl, getSavedPosition, onPositionSave } = props;
   const [activeIndex, setActiveIndex] = useState(0);
-  const [playbackRate, setPlaybackRate] = useState(1);
   const lastSaveRef = useRef(0);
 
   // 课节切换（资源列表变化）时回到第一个视频
   useEffect(() => {
     setActiveIndex(0);
-    setPlaybackRate(1);
   }, [resources]);
 
   const active = resources[Math.min(activeIndex, resources.length - 1)] ?? null;
@@ -60,26 +65,17 @@ export function VideoPlayer(props: VideoPlayerProps) {
   };
 
   /**
-   * 修改倍速并同步到 video 元素（节拍器经 ratechange 事件自动对齐）
-   *
-   * @param rate 目标倍速
-   */
-  const changeRate = (rate: number) => {
-    setPlaybackRate(rate);
-    if (videoRef.current) videoRef.current.playbackRate = rate;
-  };
-
-  /**
-   * 元数据加载完成后恢复续播位置并应用当前倍速
+   * 元数据加载完成：恢复续播位置；无续播记录时轻移到首帧渲染封面
    */
   const restorePosition = () => {
     const el = videoRef.current;
     if (!el || !active) return;
-    el.playbackRate = playbackRate;
     const saved = getSavedPosition(active.path);
-    // 接近结尾的记录不恢复，避免一打开就结束
     if (saved > 1 && saved < el.duration - 3) {
       el.currentTime = saved;
+    } else {
+      // 关键节点：微小 seek 触发首帧解码，避免黑屏封面
+      el.currentTime = 0.001;
     }
   };
 
@@ -97,48 +93,66 @@ export function VideoPlayer(props: VideoPlayerProps) {
     }
   };
 
+  /**
+   * 处理右键菜单动作
+   *
+   * @param key 菜单项标识
+   */
+  const handleMenu = (key: string) => {
+    const el = videoRef.current;
+    if (!el) return;
+    if (key === "toggle") {
+      if (el.paused) void el.play();
+      else el.pause();
+    } else if (key === "back30") {
+      el.currentTime = Math.max(0, el.currentTime - 30);
+    } else if (key === "fwd30") {
+      el.currentTime = Math.min(el.duration || Infinity, el.currentTime + 30);
+    } else if (key === "mute") {
+      el.muted = !el.muted;
+    }
+  };
+
   if (!active) {
     return <EmptyState icon="video" title="本课节没有视频资源" />;
   }
 
   return (
-    <div className={videoPlayer}>
-      <div className={panelToolbar}>
-        {resources.length > 1 ? (
+    <div className="flex h-full flex-col">
+      {resources.length > 1 && (
+        <div className="flex h-10 shrink-0 items-center gap-2 border-b border-border bg-card px-2">
           <Tabs
             items={resources.map((res) => ({ key: res.path, label: res.name }))}
             activeKey={active.path}
             onChange={(key) => setActiveIndex(resources.findIndex((r) => r.path === key))}
           />
-        ) : (
-          <span className={panelTitle} title={active.name}>
-            {active.name}
-          </span>
-        )}
-        <RateGroup value={playbackRate} onChange={changeRate} />
-      </div>
-      <div className={videoStage}>
-        <video
-          key={active.path}
-          ref={videoRef}
-          className={videoEl}
-          src={mediaSrc(active.path)}
-          controls
-          playsInline
-          onLoadedMetadata={restorePosition}
-          onPlay={() => withVideo(engineControl.startSynced)}
-          onPause={() => {
-            engineControl.stopFromMedia();
-            // 暂停时立即落一次续播位置
-            const el = videoRef.current;
-            if (el && active) onPositionSave(active.path, el.currentTime);
-          }}
-          onEnded={() => engineControl.stopFromMedia()}
-          onSeeked={() => withVideo(engineControl.align)}
-          onRateChange={() => withVideo(engineControl.align)}
-          onTimeUpdate={handleTimeUpdate}
-        />
-      </div>
+        </div>
+      )}
+      <ContextMenu items={VIDEO_MENU_ITEMS} onSelect={handleMenu}>
+        <div className="flex min-h-0 flex-1 items-center justify-center bg-stage">
+          <video
+            key={active.path}
+            ref={videoRef}
+            className="h-full w-full object-contain"
+            src={mediaSrc(active.path)}
+            controls
+            playsInline
+            preload="metadata"
+            onLoadedMetadata={restorePosition}
+            onPlay={() => withVideo(engineControl.startSynced)}
+            onPause={() => {
+              engineControl.stopFromMedia();
+              // 暂停时立即落一次续播位置
+              const el = videoRef.current;
+              if (el && active) onPositionSave(active.path, el.currentTime);
+            }}
+            onEnded={() => engineControl.stopFromMedia()}
+            onSeeked={() => withVideo(engineControl.align)}
+            onRateChange={() => withVideo(engineControl.align)}
+            onTimeUpdate={handleTimeUpdate}
+          />
+        </div>
+      </ContextMenu>
     </div>
   );
 }

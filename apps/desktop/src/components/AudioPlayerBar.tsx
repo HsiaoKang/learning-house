@@ -8,6 +8,7 @@
 import { useEffect, useState, type RefObject } from "react";
 import { Checkbox, IconButton, Select, Slider } from "@learning-house/ui";
 import { mediaSrc } from "../lib/platform";
+import { formatTime } from "../lib/format";
 import type { MediaEngineControl } from "../hooks/useMetronome";
 import type { LessonResource } from "../types";
 import { RateGroup } from "./RateGroup";
@@ -19,19 +20,6 @@ interface AudioPlayerBarProps {
   audioRef: RefObject<HTMLAudioElement | null>;
   /** 节拍器联动控制接口（audio 源） */
   engineControl: MediaEngineControl;
-}
-
-/**
- * 把秒数格式化为 m:ss 形式
- *
- * @param sec 秒数
- * @returns 格式化字符串，如 3:07
- */
-function formatTime(sec: number): string {
-  if (!Number.isFinite(sec)) return "0:00";
-  const m = Math.floor(sec / 60);
-  const s = Math.floor(sec % 60);
-  return `${m}:${String(s).padStart(2, "0")}`;
 }
 
 /**

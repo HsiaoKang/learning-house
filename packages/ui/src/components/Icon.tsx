@@ -12,6 +12,7 @@ import {
   ChevronLeft,
   ChevronRight,
   FolderOpen,
+  Maximize,
   Minus,
   Monitor,
   Moon,
@@ -25,6 +26,8 @@ import {
   Sun,
   Trash2,
   Video,
+  Volume2,
+  VolumeX,
   X,
   type LucideIcon,
 } from "lucide-react";
@@ -37,6 +40,7 @@ const ICONS = {
   chevronRight: ChevronRight,
   close: X,
   folderOpen: FolderOpen,
+  fullscreen: Maximize,
   minus: Minus,
   monitor: Monitor,
   moon: Moon,
@@ -51,6 +55,8 @@ const ICONS = {
   swap: ArrowLeftRight,
   trash: Trash2,
   video: Video,
+  volume: Volume2,
+  volumeMute: VolumeX,
 } satisfies Record<string, LucideIcon>;
 
 export type IconName = keyof typeof ICONS;

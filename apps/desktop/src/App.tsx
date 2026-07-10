@@ -11,6 +11,7 @@ import { IconButton } from "@learning-house/ui";
 import { LibraryPage } from "./pages/LibraryPage";
 import { ClassroomPage } from "./pages/ClassroomPage";
 import { readDirTree, readManifestName, scanCourseFolder, writeManifest } from "./lib/scanner";
+import { showMessage } from "./lib/dialogs";
 import { buildOrganizePrompt } from "./lib/aiPrompt";
 import { loadCourseProgress, saveCourseProgress, type CourseProgress } from "./lib/progress";
 import {
@@ -122,13 +123,13 @@ function App() {
     async (type: CourseType) => {
       const selected = await open({ directory: true, multiple: false, title: "选择课程根文件夹" });
       if (typeof selected !== "string") return;
-      const course = await scanCourseFolder(selected, type).catch((e: unknown) => {
-        alert(String(e instanceof Error ? e.message : e));
+      const course = await scanCourseFolder(selected, type).catch(async (e: unknown) => {
+        await showMessage(String(e instanceof Error ? e.message : e), "导入失败");
         return null;
       });
       if (!course) return;
       if (course.lessons.length === 0) {
-        alert("该文件夹内没有识别到可用资源（视频/音频/图片/PDF/Guitar Pro）。");
+        await showMessage("该文件夹内没有识别到可用资源（视频/音频/图片/PDF/Guitar Pro）。");
         return;
       }
       const progress = await loadCourseProgress(selected);
@@ -149,7 +150,7 @@ function App() {
     const tree = await readDirTree(selected, 0);
     const prompt = buildOrganizePrompt(tree);
     if (!prompt) {
-      alert("该文件夹内没有识别到可用资源。");
+      await showMessage("该文件夹内没有识别到可用资源。");
       return null;
     }
     return { prompt, rootDir: selected };
@@ -168,7 +169,7 @@ function App() {
         await writeManifest(rootDir, manifestJson);
         const course = await scanCourseFolder(rootDir, type);
         if (course.lessons.length === 0) {
-          alert("清单未匹配到任何有效资源，请检查 AI 输出的路径是否与文件一致。");
+          await showMessage("清单未匹配到任何有效资源，请检查 AI 输出的路径是否与文件一致。", "导入失败");
           return false;
         }
         const progress = await loadCourseProgress(rootDir);
@@ -176,7 +177,7 @@ function App() {
         updateCourses((prev) => [...prev, ...applyProgress([course], progressRef.current)]);
         return true;
       } catch (e) {
-        alert(String(e instanceof Error ? e.message : e));
+        await showMessage(String(e instanceof Error ? e.message : e), "导入失败");
         return false;
       }
     },
@@ -192,8 +193,8 @@ function App() {
     async (id: string) => {
       const target = courses.find((c) => c.id === id);
       if (!target?.rootDir) return;
-      const fresh = await scanCourseFolder(target.rootDir, target.type).catch((e: unknown) => {
-        alert(String(e instanceof Error ? e.message : e));
+      const fresh = await scanCourseFolder(target.rootDir, target.type).catch(async (e: unknown) => {
+        await showMessage(String(e instanceof Error ? e.message : e), "重新扫描失败");
         return null;
       });
       if (!fresh) return;
@@ -352,7 +353,7 @@ function App() {
           <LibraryPage
             courses={courses}
             onOpenCourse={setActiveCourseId}
-            onImportFolder={(type) => void importFolder(type)}
+            onImportFolder={importFolder}
             onGenerateAiPrompt={generateAiPrompt}
             onImportByPastedManifest={importByPastedManifest}
             onRescanCourse={(id) => void rescanCourse(id)}

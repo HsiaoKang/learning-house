@@ -17,13 +17,14 @@ import {
   cn,
 } from "@learning-house/ui";
 import { COURSE_TYPE_LABELS, type Course, type CourseType } from "../types";
+import { showConfirm, showMessage } from "../lib/dialogs";
 
 interface LibraryPageProps {
   courses: Course[];
   /** 进入某课程的上课页 */
   onOpenCourse: (id: string) => void;
-  /** 选择文件夹导入课程（type 为课程类型） */
-  onImportFolder: (type: CourseType) => void;
+  /** 选择文件夹导入课程（type 为课程类型），完成/取消后 resolve */
+  onImportFolder: (type: CourseType) => Promise<void>;
   /** 选择文件夹并生成 AI 整理提示词（取消选择时返回 null） */
   onGenerateAiPrompt: () => Promise<{ prompt: string; rootDir: string } | null>;
   /** 用户贴回 AI 清单后写入并导入，返回是否成功 */
@@ -70,6 +71,8 @@ export function LibraryPage(props: LibraryPageProps) {
   const [pasted, setPasted] = useState("");
   const [copied, setCopied] = useState(false);
   const [importing, setImporting] = useState(false);
+  /** 正在扫描导入的课程类型（按钮显示扫描中） */
+  const [scanningType, setScanningType] = useState<CourseType | null>(null);
   /** 正在重新扫描的课程 id（刷新图标旋转） */
   const [rescanningId, setRescanningId] = useState<string | null>(null);
 
@@ -179,9 +182,9 @@ export function LibraryPage(props: LibraryPageProps) {
                       name="trash"
                       label="删除课程"
                       onClick={() => {
-                        if (confirm(`确认从课程库删除「${course.name}」？磁盘文件不会被删除。`)) {
-                          onDeleteCourse(course.id);
-                        }
+                        void showConfirm(`确认从课程库删除「${course.name}」？磁盘文件不会被删除。`).then(
+                          (ok) => ok && onDeleteCourse(course.id),
+                        );
                       }}
                     />
                   </div>
@@ -203,12 +206,17 @@ export function LibraryPage(props: LibraryPageProps) {
               key={type}
               variant="primary"
               className="flex-1"
+              disabled={scanningType !== null}
               onClick={() => {
-                setImportOpen(false);
-                onImportFolder(type);
+                // 扫描完成前保持弹窗与加载态，避免"选完文件夹没反应"的观感
+                setScanningType(type);
+                void onImportFolder(type).finally(() => {
+                  setScanningType(null);
+                  setImportOpen(false);
+                });
               }}
             >
-              {COURSE_TYPE_LABELS[type]}课程
+              {scanningType === type ? "扫描中…" : `${COURSE_TYPE_LABELS[type]}课程`}
             </Button>
           ))}
         </div>
@@ -240,7 +248,7 @@ export function LibraryPage(props: LibraryPageProps) {
                 void navigator.clipboard
                   .writeText(aiSession?.prompt ?? "")
                   .then(() => setCopied(true))
-                  .catch(() => alert("复制失败，请点击文本框全选后手动复制。"));
+                  .catch(() => void showMessage("复制失败，请点击文本框全选后手动复制。"));
               }}
             >
               {copied ? "已复制 ✓" : "复制提示词"}

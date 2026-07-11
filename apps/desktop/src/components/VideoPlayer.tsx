@@ -368,7 +368,11 @@ export function VideoPlayer(props: VideoPlayerProps) {
               setPlaying(false);
               engineControl.stopFromMedia();
             }}
-            onSeeked={() => withVideo(engineControl.align)}
+            onSeeked={() => {
+              withVideo(engineControl.align);
+              // 快捷键/菜单快进退时唤起控制层，让进度变化可见
+              showControls();
+            }}
             onRateChange={() => {
               withVideo(engineControl.align);
               setRate(videoRef.current?.playbackRate ?? 1);

@@ -49,14 +49,22 @@ export function useMediaShortcuts(mediaRef: RefObject<HTMLVideoElement | HTMLAud
           e.preventDefault();
           media.currentTime = Math.min(media.duration || Infinity, media.currentTime + SEEK_STEP_SEC);
           break;
-        case "ArrowUp":
+        case "ArrowUp": {
           e.preventDefault();
-          media.volume = Math.min(1, media.volume + VOLUME_STEP);
+          const before = media.volume;
+          media.muted = false;
+          media.volume = Math.min(1, before + VOLUME_STEP);
+          // 关键节点：已在边界时值不变、原生不发事件，手动补发保证操作有反馈
+          if (media.volume === before) media.dispatchEvent(new Event("volumechange"));
           break;
-        case "ArrowDown":
+        }
+        case "ArrowDown": {
           e.preventDefault();
-          media.volume = Math.max(0, media.volume - VOLUME_STEP);
+          const before = media.volume;
+          media.volume = Math.max(0, before - VOLUME_STEP);
+          if (media.volume === before) media.dispatchEvent(new Event("volumechange"));
           break;
+        }
       }
     };
     window.addEventListener("keydown", onKeyDown);

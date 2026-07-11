@@ -8,12 +8,16 @@
   "scripts": {
     "dev": "pnpm --filter @learning-house/desktop tauri dev",
     "build": "pnpm --filter @learning-house/desktop tauri build",
-    "typecheck": "pnpm -r typecheck"
+    "typecheck": "pnpm -r typecheck",
+    "prepare": "husky"
   },
   "packageManager": "pnpm@10.18.3",
   "pnpm": {
     "onlyBuiltDependencies": [
       "esbuild"
     ]
+  },
+  "devDependencies": {
+    "husky": "^9.1.7"
   }
 }

@@ -32,6 +32,10 @@ interface ToolBarProps {
     setSync: (patch: Partial<SyncConfig>) => void;
     hasAudio: boolean;
     getMediaTime: () => number | null;
+    /** BPM 识别进行中 */
+    detectingBpm: boolean;
+    /** 识别当前伴奏 BPM 并自动卡点 */
+    onDetectBpm: () => void;
   };
 }
 
@@ -66,6 +70,8 @@ export function ToolBar({ tool, onToolChange, metronome }: ToolBarProps) {
             setSync={metronome.setSync}
             hasAudio={metronome.hasAudio}
             getMediaTime={metronome.getMediaTime}
+            detectingBpm={metronome.detectingBpm}
+            onDetectBpm={metronome.onDetectBpm}
           />
         ) : (
           <span className="block px-3.5 text-[13px] text-muted-foreground">未启用工具</span>

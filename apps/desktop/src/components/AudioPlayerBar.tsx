@@ -21,6 +21,8 @@ interface AudioPlayerBarProps {
   audioRef: RefObject<HTMLAudioElement | null>;
   /** 节拍器联动控制接口（audio 源） */
   engineControl: MediaEngineControl;
+  /** 当前选中的伴奏路径变化时上报（无伴奏时为 null） */
+  onActiveResourceChange?: (path: string | null) => void;
 }
 
 /**
@@ -29,7 +31,7 @@ interface AudioPlayerBarProps {
  * @param props 见 AudioPlayerBarProps 字段说明
  */
 export function AudioPlayerBar(props: AudioPlayerBarProps) {
-  const { resources, audioRef, engineControl } = props;
+  const { resources, audioRef, engineControl, onActiveResourceChange } = props;
   const [activeIndex, setActiveIndex] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -58,6 +60,11 @@ export function AudioPlayerBar(props: AudioPlayerBarProps) {
     el.addEventListener("app:volumeflash", onFlash);
     return () => el.removeEventListener("app:volumeflash", onFlash);
   }, [audioRef, active?.path]);
+
+  // 当前伴奏变化时上报（BPM 识别等外部功能需要知道正在用哪个伴奏）
+  useEffect(() => {
+    onActiveResourceChange?.(active?.path ?? null);
+  }, [active?.path, onActiveResourceChange]);
 
   /**
    * 读取音频元素当前进度并执行回调（元素不存在时忽略）

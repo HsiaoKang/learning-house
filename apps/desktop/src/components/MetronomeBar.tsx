@@ -26,6 +26,10 @@ interface MetronomeBarProps {
   hasAudio: boolean;
   /** 读取当前联动源媒体的播放位置（用于一键设置首拍偏移） */
   getMediaTime: () => number | null;
+  /** BPM 识别进行中 */
+  detectingBpm: boolean;
+  /** 识别当前伴奏 BPM 并自动卡点（自动设置 BPM 与首拍偏移） */
+  onDetectBpm: () => void;
 }
 
 /**
@@ -34,7 +38,19 @@ interface MetronomeBarProps {
  * @param props 见 MetronomeBarProps 字段说明
  */
 export function MetronomeBar(props: MetronomeBarProps) {
-  const { options, updateOptions, running, toggle, activeBeat, sync, setSync, hasAudio, getMediaTime } = props;
+  const {
+    options,
+    updateOptions,
+    running,
+    toggle,
+    activeBeat,
+    sync,
+    setSync,
+    hasAudio,
+    getMediaTime,
+    detectingBpm,
+    onDetectBpm,
+  } = props;
   const [tapOpen, setTapOpen] = useState(false);
 
   /**
@@ -127,6 +143,15 @@ export function MetronomeBar(props: MetronomeBarProps) {
         />
         {sync.source !== "none" && (
           <>
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={detectingBpm}
+              onClick={onDetectBpm}
+              title="分析伴奏节奏，自动设置 BPM 与首拍偏移"
+            >
+              {detectingBpm ? "识别中…" : "识别 BPM"}
+            </Button>
             <span className="text-xs text-muted-foreground">首拍</span>
             <NumberStepper
               min={0}

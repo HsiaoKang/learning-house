@@ -6,13 +6,14 @@
  * 全局媒体快捷键：空格播停、左右快进退、上下音量。
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Button, Checkbox, EmptyState, IconButton, Select } from "@learning-house/ui";
+import { Button, Checkbox, EmptyState, IconButton, Select, toast } from "@learning-house/ui";
 import { SplitPane } from "../components/SplitPane";
 import { VideoPlayer } from "../components/VideoPlayer";
 import { AudioPlayerBar } from "../components/AudioPlayerBar";
 import { DocViewer } from "../components/DocViewer";
 import { ResourcePicker } from "../components/ResourcePicker";
 import { ToolBar } from "../components/ToolBar";
+import { detectBpmFromFile } from "../lib/bpmDetect";
 import { useMetronome } from "../hooks/useMetronome";
 import { useMediaShortcuts } from "../hooks/useMediaShortcuts";
 import {
@@ -104,6 +105,30 @@ export function ClassroomPage(props: ClassroomPageProps) {
     return null;
   }, [metronome.sync.source]);
 
+  /** 当前选中的伴奏路径（BPM 识别的分析对象） */
+  const currentAudioPathRef = useRef<string | null>(null);
+  /** BPM 识别进行中 */
+  const [detectingBpm, setDetectingBpm] = useState(false);
+
+  /**
+   * 识别当前伴奏的 BPM 与首拍偏移，写入节拍器实现自动卡点
+   */
+  const detectBpm = useCallback(async () => {
+    const path = currentAudioPathRef.current;
+    if (!path || detectingBpm) return;
+    setDetectingBpm(true);
+    try {
+      const { bpm, offset } = await detectBpmFromFile(path);
+      metronome.updateOptions({ bpm });
+      metronome.setSync({ firstBeatOffset: offset });
+      toast(`已识别伴奏：${bpm} BPM · 首拍 ${offset}s`);
+    } catch {
+      toast("识别失败：节奏特征不明显或文件无法解码");
+    } finally {
+      setDetectingBpm(false);
+    }
+  }, [detectingBpm, metronome.updateOptions, metronome.setSync]);
+
   if (!lesson) {
     return (
       <div className="flex h-full flex-col">
@@ -179,7 +204,14 @@ export function ClassroomPage(props: ClassroomPageProps) {
         />
       </main>
 
-      <AudioPlayerBar resources={audioResources} audioRef={audioRef} engineControl={audioControl} />
+      <AudioPlayerBar
+        resources={audioResources}
+        audioRef={audioRef}
+        engineControl={audioControl}
+        onActiveResourceChange={(path) => {
+          currentAudioPathRef.current = path;
+        }}
+      />
 
       <ToolBar
         tool={tool}
@@ -194,6 +226,8 @@ export function ClassroomPage(props: ClassroomPageProps) {
           setSync: metronome.setSync,
           hasAudio: audioResources.length > 0,
           getMediaTime,
+          detectingBpm,
+          onDetectBpm: () => void detectBpm(),
         }}
       />
 

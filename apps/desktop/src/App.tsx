@@ -187,23 +187,27 @@ function App() {
    * 从文件夹导入课程：弹目录选择器 -> 扫描 -> 加入课程库并读取进度
    *
    * @param type 课程类型
+   * @param onScanStart 用户选定文件夹、扫描真正开始时回调（UI 显示扫描中）
+   * @returns 是否走完了导入流程（取消选择返回 false，调用方保持弹窗）
    */
   const importFolder = useCallback(
-    async (type: CourseType) => {
+    async (type: CourseType, onScanStart?: () => void) => {
       const selected = await open({ directory: true, multiple: false, title: "选择课程根文件夹" });
-      if (typeof selected !== "string") return;
+      if (typeof selected !== "string") return false;
+      onScanStart?.();
       const course = await scanCourseFolder(selected, type).catch(async (e: unknown) => {
         await showMessage(String(e instanceof Error ? e.message : e), "导入失败");
         return null;
       });
-      if (!course) return;
+      if (!course) return true;
       if (course.lessons.length === 0) {
         await showMessage("该文件夹内没有识别到可用资源（视频/音频/图片/PDF/Guitar Pro）。");
-        return;
+        return true;
       }
       const progress = await loadCourseProgress(selected);
       progressRef.current.set(course.id, progress);
       updateCourses((prev) => [...prev, ...applyProgress([course], progressRef.current)]);
+      return true;
     },
     [updateCourses],
   );

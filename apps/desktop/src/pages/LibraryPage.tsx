@@ -26,8 +26,9 @@ interface LibraryPageProps {
   courses: Course[];
   /** 进入某课程的上课页 */
   onOpenCourse: (id: string) => void;
-  /** 选择文件夹导入课程（type 为课程类型），完成/取消后 resolve */
-  onImportFolder: (type: CourseType) => Promise<void>;
+  /** 选择文件夹导入课程；onScanStart 在选定文件夹开始扫描时回调；
+   *  返回是否走完流程（取消选择返回 false） */
+  onImportFolder: (type: CourseType, onScanStart?: () => void) => Promise<boolean>;
   /** 选择文件夹并生成 AI 整理提示词（取消选择时返回 null） */
   onGenerateAiPrompt: () => Promise<{ prompt: string; rootDir: string } | null>;
   /** 用户贴回 AI 清单后写入并导入，返回是否成功 */
@@ -84,8 +85,8 @@ export function LibraryPage(props: LibraryPageProps) {
   const [pasted, setPasted] = useState("");
   const [copied, setCopied] = useState(false);
   const [importing, setImporting] = useState(false);
-  /** 正在扫描导入的课程类型（按钮显示扫描中） */
-  const [scanningType, setScanningType] = useState<CourseType | null>(null);
+  /** 导入进行中的阶段（picking 选文件夹 / scanning 扫描中，按钮据此禁用与显字） */
+  const [importPhase, setImportPhase] = useState<{ type: CourseType; phase: "picking" | "scanning" } | null>(null);
   /** 正在重新扫描的课程 id（刷新图标旋转） */
   const [rescanningId, setRescanningId] = useState<string | null>(null);
 
@@ -273,17 +274,21 @@ export function LibraryPage(props: LibraryPageProps) {
               key={type}
               variant="primary"
               className="flex-1"
-              disabled={scanningType !== null}
+              disabled={importPhase !== null}
               onClick={() => {
-                // 扫描完成前保持弹窗与加载态，避免"选完文件夹没反应"的观感
-                setScanningType(type);
-                void onImportFolder(type).finally(() => {
-                  setScanningType(null);
-                  setImportOpen(false);
-                });
+                // 关键节点：选文件夹与扫描分两阶段——选择期间按钮只禁用不变字，
+                // 真正开始扫描才显示"扫描中"；取消选择保持弹窗可重选
+                setImportPhase({ type, phase: "picking" });
+                void onImportFolder(type, () => setImportPhase({ type, phase: "scanning" }))
+                  .then((done) => {
+                    if (done) setImportOpen(false);
+                  })
+                  .finally(() => setImportPhase(null));
               }}
             >
-              {scanningType === type ? "扫描中…" : `${COURSE_TYPE_LABELS[type]}课程`}
+              {importPhase?.type === type && importPhase.phase === "scanning"
+                ? "扫描中…"
+                : `${COURSE_TYPE_LABELS[type]}课程`}
             </Button>
           ))}
         </div>

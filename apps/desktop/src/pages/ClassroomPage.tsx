@@ -215,8 +215,13 @@ export function ClassroomPage(props: ClassroomPageProps) {
     [metronome.updateOptions, metronome.sync.source, persistAudioMeta],
   );
 
+  /** 自动识别的最新引用（识别函数声明在后，规避声明顺序依赖） */
+  const detectBpmRef = useRef<() => Promise<void>>(async () => {});
+
   /**
-   * 工具栏联动配置入口：手动调整首拍偏移同样落盘为该伴奏的校准值
+   * 工具栏联动配置入口：手动调整首拍偏移落盘为该伴奏的校准值；
+   * 开启跟随伴奏时，有预设（已识别/已手动校准）直接应用，
+   * 没有预设自动识别一次——开关本身已表达"按这首伴奏打"的完整意图
    */
   const updateMetronomeSync = useCallback(
     (patch: Partial<SyncConfig>) => {
@@ -224,8 +229,20 @@ export function ClassroomPage(props: ClassroomPageProps) {
       if (patch.firstBeatOffset !== undefined && metronome.sync.source === "audio") {
         persistAudioMeta({ firstBeatOffset: patch.firstBeatOffset }, true);
       }
+      if (patch.source === "audio") {
+        const path = currentAudioPathRef.current;
+        const rootDir = course.rootDir;
+        const preset = path && rootDir ? mediaMetaRef.current.audio[relativePathOf(rootDir, path)] : undefined;
+        if (preset) {
+          metronome.updateOptions({ bpm: preset.bpm });
+          metronome.setSync({ firstBeatOffset: preset.firstBeatOffset });
+          toast(`已应用伴奏预设：${preset.bpm} BPM · 首拍 ${preset.firstBeatOffset}s`);
+        } else if (path) {
+          void detectBpmRef.current();
+        }
+      }
     },
-    [metronome.setSync, metronome.sync.source, persistAudioMeta],
+    [metronome.setSync, metronome.sync.source, metronome.updateOptions, persistAudioMeta, course.rootDir],
   );
 
   // 切换课节：停掉正在响的节拍器；无伴奏课节联动源退回不联动
@@ -259,6 +276,7 @@ export function ClassroomPage(props: ClassroomPageProps) {
       setDetectingBpm(false);
     }
   }, [detectingBpm, metronome.updateOptions, metronome.setSync, persistAudioMeta]);
+  detectBpmRef.current = detectBpm;
 
   /**
    * TAP 测速结果应用：当前伴奏识别过时，把人拍的粗略节奏吸附到

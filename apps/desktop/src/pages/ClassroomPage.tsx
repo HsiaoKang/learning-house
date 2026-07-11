@@ -89,8 +89,7 @@ export function ClassroomPage(props: ClassroomPageProps) {
   const audioResources = useMemo(() => lesson?.resources.filter((r) => r.kind === "audio") ?? [], [lesson]);
   const docResources = useMemo(() => lesson?.resources.filter((r) => isDocKind(r.kind)) ?? [], [lesson]);
 
-  // 为视频与音频分别生成联动控制接口（只有选中的联动源会驱动节拍器）
-  const videoControl = useMemo(() => metronome.bindSource("video"), [metronome.bindSource]);
+  // 伴奏音频的联动控制接口（选中音频联动源时驱动节拍器）
   const audioControl = useMemo(() => metronome.bindSource("audio"), [metronome.bindSource]);
 
   // 快捷键绑定到主媒体：有视频用视频，否则用音频
@@ -101,7 +100,6 @@ export function ClassroomPage(props: ClassroomPageProps) {
    * 读取当前联动源媒体的播放位置（秒），无联动源时返回 null
    */
   const getMediaTime = useCallback(() => {
-    if (metronome.sync.source === "video") return videoRef.current?.currentTime ?? null;
     if (metronome.sync.source === "audio") return audioRef.current?.currentTime ?? null;
     return null;
   }, [metronome.sync.source]);
@@ -122,7 +120,6 @@ export function ClassroomPage(props: ClassroomPageProps) {
     <VideoPlayer
       resources={videoResources}
       videoRef={videoRef}
-      engineControl={videoControl}
       getSavedPosition={getSavedPosition}
       onPositionSave={onSavePosition}
     />
@@ -195,7 +192,6 @@ export function ClassroomPage(props: ClassroomPageProps) {
           activeBeat: metronome.activeBeat,
           sync: metronome.sync,
           setSync: metronome.setSync,
-          hasVideo: videoResources.length > 0,
           hasAudio: audioResources.length > 0,
           getMediaTime,
         }}

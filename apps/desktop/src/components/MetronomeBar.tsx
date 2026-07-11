@@ -22,9 +22,7 @@ interface MetronomeBarProps {
   activeBeat: number;
   sync: SyncConfig;
   setSync: (patch: Partial<SyncConfig>) => void;
-  /** 是否有视频资源（决定联动源可选性） */
-  hasVideo: boolean;
-  /** 是否有音频资源（决定联动源可选性） */
+  /** 是否有伴奏音频资源（决定联动可用性） */
   hasAudio: boolean;
   /** 读取当前联动源媒体的播放位置（用于一键设置首拍偏移） */
   getMediaTime: () => number | null;
@@ -36,7 +34,7 @@ interface MetronomeBarProps {
  * @param props 见 MetronomeBarProps 字段说明
  */
 export function MetronomeBar(props: MetronomeBarProps) {
-  const { options, updateOptions, running, toggle, activeBeat, sync, setSync, hasVideo, hasAudio, getMediaTime } = props;
+  const { options, updateOptions, running, toggle, activeBeat, sync, setSync, hasAudio, getMediaTime } = props;
   const [tapOpen, setTapOpen] = useState(false);
 
   /**
@@ -115,18 +113,17 @@ export function MetronomeBar(props: MetronomeBarProps) {
         />
       </div>
 
-      <div className={cn("flex shrink-0 items-center gap-2", !hasVideo && !hasAudio && "opacity-45")}>
+      <div className={cn("flex shrink-0 items-center gap-2", !hasAudio && "opacity-45")}>
         <span className="text-xs text-muted-foreground">联动</span>
         <Select
           value={sync.source}
-          disabled={!hasVideo && !hasAudio}
+          disabled={!hasAudio}
           onChange={(v) => setSync({ source: v as SyncSource })}
           options={[
             { value: "none", label: "不联动" },
-            { value: "video", label: "跟随视频", disabled: !hasVideo },
-            { value: "audio", label: "跟随音频", disabled: !hasAudio },
+            { value: "audio", label: "跟随伴奏", disabled: !hasAudio },
           ]}
-          title="媒体播放时节拍器自动跟随其时间轴（含倍速缩放）"
+          title="伴奏播放时节拍器自动跟随其时间轴（含倍速缩放）"
         />
         {sync.source !== "none" && (
           <>

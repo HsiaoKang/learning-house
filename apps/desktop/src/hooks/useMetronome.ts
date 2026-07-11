@@ -2,13 +2,13 @@
  * 节拍器 React Hook
  *
  * 封装 Metronome 引擎实例的生命周期，并向组件暴露响应式的
- * 参数状态、启停控制以及与媒体元素（视频/伴奏）的联动绑定。
+ * 参数状态、启停控制以及与伴奏音频的联动绑定。
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Metronome, type MetronomeOptions } from "@learning-house/metronome-core";
 
-/** 联动源：节拍器跟随哪个媒体的时间轴 */
-export type SyncSource = "none" | "video" | "audio";
+/** 联动源：节拍器跟随哪个媒体的时间轴（伴奏音频有固定节奏，视频不适用） */
+export type SyncSource = "none" | "audio";
 
 /** 联动配置 */
 export interface SyncConfig {
@@ -109,10 +109,9 @@ export function useMetronome(): UseMetronomeResult {
 
   /**
    * 为指定媒体源生成引擎控制接口。
-   * 关键节点：仅当该源是当前选中的联动源时，媒体事件才会驱动节拍器，
-   * 因此视频与伴奏可以各自挂接而互不干扰。
+   * 关键节点：仅当该源是当前选中的联动源时，媒体事件才会驱动节拍器。
    *
-   * @param source 媒体源标识（video / audio）
+   * @param source 媒体源标识（audio）
    */
   const bindSource = useCallback(
     (source: Exclude<SyncSource, "none">): MediaEngineControl => ({

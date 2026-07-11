@@ -30,7 +30,6 @@ interface ToolBarProps {
     activeBeat: number;
     sync: SyncConfig;
     setSync: (patch: Partial<SyncConfig>) => void;
-    hasVideo: boolean;
     hasAudio: boolean;
     getMediaTime: () => number | null;
   };
@@ -65,7 +64,6 @@ export function ToolBar({ tool, onToolChange, metronome }: ToolBarProps) {
             activeBeat={metronome.activeBeat}
             sync={metronome.sync}
             setSync={metronome.setSync}
-            hasVideo={metronome.hasVideo}
             hasAudio={metronome.hasAudio}
             getMediaTime={metronome.getMediaTime}
           />

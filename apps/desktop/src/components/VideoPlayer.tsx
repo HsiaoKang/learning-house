@@ -4,7 +4,7 @@
  * 内核为原生 video 元素，控制层自绘（播放/进度/时间/音量/倍速/全屏），
  * 三端观感一致。多个视频 tab 切换；封面通过"静音试播 -> 确认上屏 ->
  * 暂停回位"的事件驱动流程可靠渲染；续播采用 B 站式策略：超过阈值
- * 一律恢复并提示，限时可撤销回开头。媒体事件转发给节拍器联动。
+ * 一律恢复并提示，限时可撤销回开头。
  */
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 
@@ -12,7 +12,6 @@ import { AnimatePresence, motion } from "motion/react";
 import { ContextMenu, EmptyState, Icon, IconButton, Slider, Tabs, cn } from "@learning-house/ui";
 import { IS_TAURI, mediaSrc } from "../lib/platform";
 import { formatTime } from "../lib/format";
-import type { MediaEngineControl } from "../hooks/useMetronome";
 import type { LessonResource } from "../types";
 import { RateSelect } from "./RateSelect";
 import { VolumeControl } from "./VolumeControl";
@@ -38,8 +37,6 @@ interface VideoPlayerProps {
   resources: LessonResource[];
   /** 视频元素引用（供外层查询播放状态与快捷键控制） */
   videoRef: RefObject<HTMLVideoElement | null>;
-  /** 节拍器联动控制接口（video 源） */
-  engineControl: MediaEngineControl;
   /** 查询资源的续播位置（秒），无记录返回 0 */
   getSavedPosition: (path: string) => number;
   /** 播放位置变化回调（已节流），用于持久化续播 */
@@ -52,7 +49,7 @@ interface VideoPlayerProps {
  * @param props 见 VideoPlayerProps 字段说明
  */
 export function VideoPlayer(props: VideoPlayerProps) {
-  const { resources, videoRef, engineControl, getSavedPosition, onPositionSave } = props;
+  const { resources, videoRef, getSavedPosition, onPositionSave } = props;
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
   const lastSaveRef = useRef(0);
@@ -146,16 +143,6 @@ export function VideoPlayer(props: VideoPlayerProps) {
     setControlsVisible(true);
     scheduleHide();
   }, [scheduleHide]);
-
-  /**
-   * 读取视频元素当前进度并执行回调（元素不存在时忽略）
-   *
-   * @param fn 拿到 (currentTime, playbackRate) 后的处理函数
-   */
-  const withVideo = (fn: (time: number, rate: number) => void) => {
-    const el = videoRef.current;
-    if (el) fn(el.currentTime, el.playbackRate);
-  };
 
   /**
    * 封面渲染：静音试播，等 playing 事件确认画面上屏后暂停并回位。
@@ -278,10 +265,9 @@ export function VideoPlayer(props: VideoPlayerProps) {
   }, [fullscreen, toggleFullscreen]);
 
   /**
-   * timeupdate 驱动：刷新控制层 + 节流保存续播位置 + 节拍器对齐
+   * timeupdate 驱动：刷新控制层 + 节流保存续播位置
    */
   const handleTimeUpdate = () => {
-    withVideo(engineControl.align);
     const el = videoRef.current;
     if (!el || !active) return;
     setCurrentTime(el.currentTime);
@@ -361,28 +347,23 @@ export function VideoPlayer(props: VideoPlayerProps) {
               setPlaying(true);
               setResumeToast(null);
               showControls();
-              withVideo(engineControl.startSynced);
             }}
             onPause={() => {
               if (coverHackRef.current) return;
               setPlaying(false);
               showControls();
-              engineControl.stopFromMedia();
               // 暂停时立即落一次续播位置
               const el = videoRef.current;
               if (el && active) onPositionSave(active.path, el.currentTime);
             }}
             onEnded={() => {
               setPlaying(false);
-              engineControl.stopFromMedia();
             }}
             onSeeked={() => {
-              withVideo(engineControl.align);
               // 快捷键/菜单快进退时唤起控制层，让进度变化可见
               showControls();
             }}
             onRateChange={() => {
-              withVideo(engineControl.align);
               setRate(videoRef.current?.playbackRate ?? 1);
             }}
             onTimeUpdate={handleTimeUpdate}

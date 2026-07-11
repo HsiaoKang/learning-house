@@ -25,21 +25,26 @@ export function Modal({ open, onClose, title, children, widthClassName = "w-[340
     <DialogPrimitive.Root open={open} onOpenChange={(next) => !next && onClose()}>
       <DialogPrimitive.Portal>
         <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/55 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:fade-out-0" />
-        <DialogPrimitive.Content
-          className={cn(
-            "fixed left-1/2 top-1/2 z-50 flex max-h-[85vh] -translate-x-1/2 -translate-y-1/2 flex-col gap-3.5 overflow-y-auto rounded-xl border border-border bg-card p-4 shadow-2xl",
-            "data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95",
-            widthClassName,
-          )}
-        >
-          <div className="flex items-center justify-between text-sm font-semibold">
-            <DialogPrimitive.Title>{title}</DialogPrimitive.Title>
-            <DialogPrimitive.Close asChild>
-              <IconButton name="close" label="关闭" size="sm" />
-            </DialogPrimitive.Close>
-          </div>
-          {children}
-        </DialogPrimitive.Content>
+        {/* 关键节点：flex 容器居中替代 translate(-50%,-50%)，
+            规避 WKWebView 在半像素坐标上光栅化导致的文字发糊；
+            容器不拦截事件，点击遮罩关闭的行为不受影响 */}
+        <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center p-6">
+          <DialogPrimitive.Content
+            className={cn(
+              "pointer-events-auto flex max-h-full flex-col gap-3.5 overflow-y-auto rounded-xl border border-border bg-card p-4 shadow-2xl",
+              "data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95",
+              widthClassName,
+            )}
+          >
+            <div className="flex items-center justify-between text-sm font-semibold">
+              <DialogPrimitive.Title>{title}</DialogPrimitive.Title>
+              <DialogPrimitive.Close asChild>
+                <IconButton name="close" label="关闭" size="sm" />
+              </DialogPrimitive.Close>
+            </div>
+            {children}
+          </DialogPrimitive.Content>
+        </div>
       </DialogPrimitive.Portal>
     </DialogPrimitive.Root>
   );

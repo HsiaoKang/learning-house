@@ -2,17 +2,23 @@
  * 节拍器控制条
  *
  * 工具栏内的节拍器面板：启停、Tap 测速浮窗、BPM 调节（步进输入 +
- * 长按连发 + 滚轮微调）、拍号、重音、音量、媒体联动与拍点指示灯。
+ * 长按连发 + 滚轮微调）、拍号与每拍强弱编辑（柱高表示强弱，
+ * 点击循环 强/次强/弱/静音，播放时兼作拍点指示）、音量、伴奏联动。
  */
 import { useState } from "react";
-import { motion } from "motion/react";
-import { Button, Checkbox, NumberStepper, Select, Slider, Switch, cn } from "@learning-house/ui";
-import type { MetronomeOptions } from "@learning-house/metronome-core";
+import { Button, NumberStepper, Select, Slider, Switch, Tooltip, cn } from "@learning-house/ui";
+import { defaultBeatLevels, type BeatLevel, type MetronomeOptions } from "@learning-house/metronome-core";
 import type { SyncConfig } from "../hooks/useMetronome";
 import { TapTempoModal } from "./TapTempoModal";
 
 /** 可选拍号（每小节拍数） */
 const BEATS_OPTIONS = [2, 3, 4, 6];
+
+/** 各强弱等级的柱高（像素），索引即等级（0 静音 ~ 3 强） */
+const LEVEL_HEIGHTS = [3, 10, 16, 24];
+
+/** 各强弱等级的名称（提示与无障碍标签用） */
+const LEVEL_NAMES = ["静音", "弱", "次强", "强"];
 
 interface MetronomeBarProps {
   options: MetronomeOptions;
@@ -108,15 +114,47 @@ export function MetronomeBar(props: MetronomeBarProps) {
       <div className="flex shrink-0 items-center gap-2">
         <Select
           value={String(options.beatsPerBar)}
-          onChange={(v) => updateOptions({ beatsPerBar: Number(v) })}
+          onChange={(v) => {
+            const beatsPerBar = Number(v);
+            // 切换拍号时强弱型重置为该拍号的音乐标准型
+            updateOptions({ beatsPerBar, beatLevels: defaultBeatLevels(beatsPerBar) });
+          }}
           options={BEATS_OPTIONS.map((n) => ({ value: String(n), label: `${n}/4` }))}
           title="拍号（每小节拍数）"
         />
-        <Checkbox
-          checked={options.accentFirstBeat}
-          onChange={(accentFirstBeat) => updateOptions({ accentFirstBeat })}
-          label="重音"
-        />
+        <Tooltip content="每拍强弱：柱高即响度，点击循环切换 强 / 次强 / 弱 / 静音">
+          <div className="flex h-8 items-end gap-1 rounded-md border border-border bg-secondary/60 px-1.5 pb-1">
+            {options.beatLevels.map((level, i) => {
+              const hit = i === activeBeat;
+              return (
+                <button
+                  key={i}
+                  type="button"
+                  aria-label={`第 ${i + 1} 拍：${LEVEL_NAMES[level]}`}
+                  onClick={() => {
+                    const next = [...options.beatLevels];
+                    next[i] = ((level + 3) % 4) as BeatLevel;
+                    updateOptions({ beatLevels: next });
+                  }}
+                  className="flex h-6 w-3.5 cursor-pointer items-end justify-center"
+                >
+                  <span
+                    style={{ height: LEVEL_HEIGHTS[level] }}
+                    className={cn(
+                      "w-2.5 rounded-[2px] transition-[height,background-color,box-shadow] duration-100",
+                      level === 0
+                        ? "bg-border"
+                        : hit
+                          ? "bg-primary shadow-[0_0_8px_var(--primary)]"
+                          : "bg-muted-foreground/55 hover:bg-muted-foreground/80",
+                      level === 0 && hit && "bg-muted-foreground/70",
+                    )}
+                  />
+                </button>
+              );
+            })}
+          </div>
+        </Tooltip>
       </div>
 
       <div className="flex shrink-0 items-center gap-2">
@@ -168,24 +206,6 @@ export function MetronomeBar(props: MetronomeBarProps) {
         )}
       </div>
 
-      <div className="ml-auto flex items-center gap-2 pr-1">
-        {Array.from({ length: options.beatsPerBar }, (_, i) => {
-          const hit = i === activeBeat;
-          const accent = hit && i === 0 && options.accentFirstBeat;
-          return (
-            <motion.span
-              key={i}
-              animate={hit ? { scale: 1.3 } : { scale: 1 }}
-              transition={{ duration: 0.08 }}
-              className={cn(
-                "size-3.5 rounded-full border border-border bg-secondary",
-                hit && !accent && "bg-foreground",
-                accent && "bg-primary shadow-[0_0_10px_var(--primary)]",
-              )}
-            />
-          );
-        })}
-      </div>
     </div>
   );
 }

@@ -10,7 +10,14 @@
  * - free：自由模式，按 BPM 独立打拍
  * - sync：联动模式，拍点锚定在视频时间轴上，随视频起停/倍速/跳转
  */
-import type { BeatEvent, MetronomeOptions, TimelineAlignment } from "./types";
+import { defaultBeatLevels, type BeatEvent, type BeatLevel, type MetronomeOptions, type TimelineAlignment } from "./types";
+
+/** 各强弱等级的发声参数（0 静音无此项） */
+const LEVEL_SOUND: Record<Exclude<BeatLevel, 0>, { freq: number; peak: number }> = {
+  3: { freq: 1568, peak: 1 },
+  2: { freq: 1318, peak: 0.78 },
+  1: { freq: 1046, peak: 0.55 },
+};
 
 /** 调度轮询间隔（毫秒） */
 const LOOKAHEAD_INTERVAL_MS = 25;
@@ -27,7 +34,7 @@ export class Metronome {
   private options: MetronomeOptions = {
     bpm: 90,
     beatsPerBar: 4,
-    accentFirstBeat: true,
+    beatLevels: defaultBeatLevels(4),
     volume: 0.8,
   };
 
@@ -268,22 +275,25 @@ export class Metronome {
     const ctx = this.ctx!;
     if (time < ctx.currentTime - 0.01) return; // 已过期的拍直接丢弃
     const beatInBar = beatIndex % this.options.beatsPerBar;
-    const isAccent = this.options.accentFirstBeat && beatInBar === 0;
+    const level = this.options.beatLevels[beatInBar] ?? 1;
 
-    // 木鱼风格短音：重拍用更高音高与音量
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = "square";
-    osc.frequency.value = isAccent ? 1568 : 1046;
-    const peak = isAccent ? 1 : 0.6;
-    gain.gain.setValueAtTime(peak, time);
-    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.03);
-    osc.connect(gain).connect(this.masterGain!);
-    osc.start(time);
-    osc.stop(time + 0.035);
+    // 静音拍不发声，仍派发 UI 事件驱动拍点指示
+    if (level !== 0) {
+      // 木鱼风格短音：强弱等级映射到音高与音量
+      const sound = LEVEL_SOUND[level];
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "square";
+      osc.frequency.value = sound.freq;
+      gain.gain.setValueAtTime(sound.peak, time);
+      gain.gain.exponentialRampToValueAtTime(0.001, time + 0.03);
+      osc.connect(gain).connect(this.masterGain!);
+      osc.start(time);
+      osc.stop(time + 0.035);
+      this.scheduledNodes.push({ osc, time });
+    }
 
-    this.scheduledNodes.push({ osc, time });
-    this.pendingEvents.push({ beatInBar, isAccent, time });
+    this.pendingEvents.push({ beatInBar, level, time });
   }
 
   /**

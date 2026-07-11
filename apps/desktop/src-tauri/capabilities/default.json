@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "主窗口能力：文件对话框、文件读取与目录扫描、本地资源协议、键值存储",
+  "description": "主窗口能力：文件对话框、文件读取与目录扫描、本地资源协议、键值存储、应用内更新",
   "windows": ["main"],
   "permissions": [
     "core:default",
@@ -17,6 +17,8 @@
     "fs:allow-write-text-file",
     "fs:allow-mkdir",
     "store:default",
+    "updater:default",
+    "process:allow-restart",
     {
       "identifier": "fs:scope",
       "allow": [{ "path": "**" }, { "path": "**/.learninghouse" }, { "path": "**/.learninghouse/**" }]

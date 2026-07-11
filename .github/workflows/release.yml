@@ -73,6 +73,9 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # 应用内更新（updater）签名密钥：私钥仅存于仓库 secrets，公钥固化在 tauri.conf.json
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           projectPath: apps/desktop
           tagName: ${{ inputs.tag_name || github.ref_name }}
@@ -80,4 +83,6 @@ jobs:
           releaseBody: "macOS 用户请下载 .dmg（Apple Silicon 选 aarch64，Intel 选 x64）。"
           releaseDraft: false
           prerelease: false
+          # 生成并上传 latest.json（应用内更新的版本清单）
+          includeUpdaterJson: true
           args: ${{ matrix.args }}

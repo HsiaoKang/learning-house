@@ -21,6 +21,7 @@ import {
   writeManifest,
 } from "./lib/scanner";
 import { showConfirm, showMessage } from "./lib/dialogs";
+import { runStartupUpdateCheck } from "./lib/updater";
 import { buildOrganizePrompt } from "./lib/aiPrompt";
 import { loadCourseProgress, saveCourseProgress, type CourseProgress } from "./lib/progress";
 import {
@@ -111,6 +112,11 @@ function App() {
     const onContextMenu = (e: MouseEvent) => e.preventDefault();
     window.addEventListener("contextmenu", onContextMenu);
     return () => window.removeEventListener("contextmenu", onContextMenu);
+  }, []);
+
+  // 启动后静默检查应用更新（仅 Tauri 生产构建生效，失败静默忽略）
+  useEffect(() => {
+    void runStartupUpdateCheck(toast);
   }, []);
 
   /**

@@ -1,127 +1,125 @@
+<div align="center">
+
 # Learning House
 
-通用课程管理与上课桌面工具：把本地的视频 / 音频 / 图片 / PDF / Guitar Pro 资源整合成课节，
-在同一界面完成看课、看谱、练习与进度管理。
+**把网盘下载的课程，变成真正能上课的地方。**
 
-本地优先（local-first）：所有课程资源与学习数据都留在你自己的设备上。
+[![Release](https://img.shields.io/github/v/release/HsiaoKang/learning-house)](https://github.com/HsiaoKang/learning-house/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/HsiaoKang/learning-house/total)](https://github.com/HsiaoKang/learning-house/releases)
+[![License](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
 
+</div>
 
-## 核心概念
+买来的视频课程解压后是一堆乱糟糟的文件？Learning House 把整个文件夹一键变成结构化的课程：
+视频、曲谱、伴奏自动对号入座，同一屏幕看课、看谱、跟着节拍器练习，学到哪一课一目了然。
 
-- **课程 Course**：一组课节，带类型（吉他 / 通用）与学习进度
-- **课节 Lesson**：一组资源（视频 + 音频 + 文档），可标记完成
-- **整理规则（按优先级）**：
-  1. **课节清单**：根文件夹下存在 `learning-house.json` 时优先按清单组课（见下）
-  2. **网课结构启发式**：自动识别两种常见网课打包结构——
-     **平铺视频型**（根目录平铺编号视频 + 独立资料文件夹）：每个编号视频归纳为一个课节，
-     文件名含相同课号（`-12：`）或"第X集"的视频自动合并；
-     **嵌套课时型**（唯一的视频文件夹内含成批课时子文件夹，旁边是纯资料文件夹）：
-     每个课时子文件夹归纳为一个课节。
-     两种结构的配套资料都按 课号 > 集号 > 主题文本 匹配进对应课节，
-     匹配不到的归入"未分组资料"（可用 `scripts/test-scan.ts` 对本地课程目录离线回归验证）
-  3. **默认规则**：每个子文件夹归纳为一个课节；根目录散落文件归为"未分组"课节；
-     无子文件夹时整个文件夹视为单课节课程
-- **AI 整理**：目录结构特殊、自动整理不理想时，导入弹窗内可一键生成"整理提示词"
-  （文件清单 + 格式说明），粘贴给任意 AI，把返回的 JSON 存为根文件夹下的
-  `learning-house.json` 即可导入——无需上传任何数据，保持 local-first
-- **课节清单格式**：适配任意目录结构而无需移动原文件：
+macOS / Windows / Linux 桌面应用。**本地优先（local-first）**——你的课程和学习数据永远只在你自己的设备上。
 
-```json
-{
-  "name": "课程名（可选，默认取文件夹名）",
-  "lessons": [
-    {
-      "name": "课节名",
-      "resources": ["视频.mp4", "资料/谱子.pdf", "资料/伴奏.mp3"]
-    }
-  ]
-}
-```
+<!-- 截图占位：课程库页（多门课程卡片带进度） -->
+<!-- 截图占位：上课页（左视频右曲谱 + 底部节拍器） -->
 
-  资源路径相对课程根文件夹（也支持绝对路径），课节顺序即清单顺序；
-  文件类别由扩展名自动识别，缺失文件自动跳过。清单可手写，也可用脚本生成
-  （参考 `scripts/gen-manifest-chengtian.mjs`，按文件名规律匹配视频与配套资料）
+## 核心能力
 
-## 功能
+### 文件夹进，课程出
+- 拖入课程文件夹自动组课：81 个编号视频 + 35 份配套资料，自动归纳成 81 节课，谱子和伴奏挂到对应课节
+- 自动识别两种主流网课打包结构（平铺编号视频型 / 课时子文件夹型），课节数与视频文件数严格一致，不多不少
+- 结构特殊？内置 **AI 整理**：一键生成提示词发给任意 AI（ChatGPT / 豆包 / Kimi…），贴回 JSON 即完成组课，全程零上传
+- **课节管理页**：人工调整最后一米——改名、排序、增删课节，资源在课节间移动/复制（多节共用同一份曲谱伴奏），未引用文件一目了然
+- 上课时发现缺谱子？**就地关联**课程内任何资料到当前课节（讲解课直接引用上一节的曲谱伴奏）
 
-### 课程库
-- 课程卡片：类型标签、课节数、学习进度条（已完成课节 / 总课节）
-- 从文件夹导入课程（自动扫描归纳课节）、重新扫描（保留完成状态）、删除
+### 同屏上课
+- 左视频右文档（可对调、可拖分割线），视频多集 tab 切换、倍速、断点续播
+- 曲谱支持图片 / PDF / **Guitar Pro**（gp3-gpx，alphaTab 渲染五线谱+六线谱）
+- 伴奏条：切换、循环、倍速、独立音量
+- 空格播放暂停、方向键快进音量——快捷键跟随你最近操作的区域（视频 / 伴奏 / 节拍器）
 
-### 上课页
-- 顶栏：课节切换（上一节 / 下一节 / 下拉）、课节完成标记、左右布局调换
-- **视频区**：课节内多视频 tab 切换，0.5x - 1.5x 倍速，自动记忆播放位置（续播）
-- **文档区**：课节内多文档 tab 切换，支持图片 / PDF（pdf.js）/ Guitar Pro（alphaTab 渲染五线谱 + 六线谱），可缩放
-- **音频条**：课节内多音频切换，进度拖动、倍速、循环、独立音量
-- **底部工具栏**：可切换工具，吉他类型课程默认带出节拍器
+### 会认谱的节拍器
+- **BPM 自动识别**：打开"跟随伴奏"自动就位——优先读音频文件名的速度标注，其次读本课节曲谱 PDF 上的 ♩=N 标记（经声学交叉验证防错谱），最后才做声学估计（频谱通量 + 倍频修正）
+- **TAP 拍击校正**：识别不准时跟着伴奏拍几下，自动吸附到精确网格（人耳定节奏层级，机器定精确数值）
+- 识别与校准结果**按音频持久化**，一次校准永久生效
+- 跟随伴奏自动起停对齐（含倍速缩放与首拍偏移），慢速练习节拍同步变慢
+- 每拍强弱可编辑（强 / 次强 / 弱 / 静音，柱高即响度），Tap Tempo 浮窗测速
 
-### 节拍器（工具）
-- BPM 20 - 300、拍号 2/4 - 6/4、首拍重音、音量、拍点指示灯
-- **Tap Tempo 浮窗**：鼠标点击或空格键击打，实时计算 BPM，一键应用
-- **媒体联动**：可跟随视频或音频——播放/暂停自动起停，跳转与倍速变化自动重对齐（慢速练习节拍同步变慢），支持首拍偏移对齐小节
+### 数据跟着课程走
+- 学习进度（完成课节、播放位置）与课节结构存在课程文件夹内的 `.learninghouse/` 目录——
+  换电脑、重装应用、拷给朋友，进度和整理成果都在
+- 应用内自动更新（GitHub Releases 分发，minisign 签名校验）
 
-## 技术栈
+## 下载安装
 
-- [Tauri 2](https://tauri.app/)（Rust 壳 + 系统 WebView），插件：dialog / fs / store
-- React 19 + TypeScript + Vite，pnpm workspace monorepo
-- [alphaTab](https://alphatab.net/)（Guitar Pro 谱渲染）、[pdf.js](https://mozilla.github.io/pdf.js/)（PDF 渲染）
-- `packages/metronome-core`：节拍器引擎（纯 TS，Web Audio 采样级调度，支持媒体时间轴锚定）
+前往 [Releases](https://github.com/HsiaoKang/learning-house/releases/latest) 下载对应平台安装包：
 
-## 目录结构
+| 平台 | 文件 | 说明 |
+|---|---|---|
+| macOS（Apple 芯片） | `*_aarch64.dmg` | 见下方首次打开说明 |
+| macOS（Intel） | `*_x64.dmg` | 同上 |
+| Windows | `*_x64-setup.exe` | SmartScreen 提示时点"仍要运行" |
+| Linux | `*.AppImage` / `*.deb` | |
 
-```
-learning-house/
-├── mise.toml                  # 工具链版本（node / rust）
-├── apps/
-│   └── desktop/               # Tauri 桌面应用
-│       ├── src/
-│       │   ├── pages/         # 课程库页 / 上课页
-│       │   ├── components/    # 播放器、文档查看器、工具栏、浮窗
-│       │   ├── lib/           # 存储、文件夹扫描、平台适配
-│       │   └── hooks/         # 节拍器 hook
-│       └── src-tauri/         # Rust 壳
-└── packages/
-    └── metronome-core/        # 节拍器核心引擎（无 UI 依赖）
-```
-
-## 开发
-
-环境要求：[mise](https://mise.jdx.dev/)（自动管理 node 与 rust 版本）、Xcode Command Line Tools。
-
-```bash
-mise install        # 安装 node 22 与 rust 1.88
-pnpm install        # 安装依赖
-pnpm dev            # 启动开发模式（Vite + Tauri）
-pnpm build          # 构建产物（.app / .dmg）
-pnpm typecheck      # 全仓库类型检查
-```
-
-## 下载与发版（GitHub Actions 自动打包）
-
-- 每次 push 到 `main`：CI 自动执行类型检查与前端构建
-- **语义化自动发版（release-please）**：提交信息遵循 [Conventional Commits](https://www.conventionalcommits.org/zh-hans/)（`feat:` 新功能升 minor、`fix:` 修复升 patch），push 到 main 后机器人自动维护 Release PR（版本号、CHANGELOG）；**合并该 PR 即发版**——自动打 tag、创建 Release，并级联构建 macOS（Apple Silicon / Intel）、Windows、Linux 安装包上传
-- 兜底：手动推 `v*` 标签也会直接触发打包
-
-macOS 安装包未签名（无 Apple 开发者证书），首次打开如提示"已损坏"，在终端执行：
+**macOS 首次打开**：安装包暂未进行 Apple 公证（个人项目省下每年 $99），首次打开若提示"已损坏"，在终端执行一次即可：
 
 ```bash
 xattr -cr "/Applications/Learning House.app"
 ```
 
+## 课程文件夹怎么组织？
+
+多数情况下**不需要组织**——直接导入，自动识别就够了。规则优先级：
+
+1. **课节清单**（`.learninghouse/manifest.json`）：存在时严格按清单组课，AI 整理与管理页的成果都固化于此
+2. **自动识别**：平铺编号视频 + 资料文件夹 → 每个视频一节课、资料按课号/主题匹配；课时子文件夹结构 → 每个文件夹一节课
+3. **默认规则**：每个子文件夹归纳为一节课
+
+清单是一份简单的 JSON（资源路径相对课程根目录，原文件无需移动）：
+
+```json
+{
+  "name": "课程名",
+  "lessons": [
+    { "name": "01 第一课", "resources": ["1-第一课.mp4", "资料/谱子.pdf", "资料/伴奏.mp3"] }
+  ]
+}
+```
+
+## 反馈
+
+- 应用内点击顶栏**反馈按钮**（自动带上版本与系统信息）
+- [提交 Issue](https://github.com/HsiaoKang/learning-house/issues/new/choose)（问题反馈 / 功能建议模板）
+- [Discussions](https://github.com/HsiaoKang/learning-house/discussions) 聊想法、投票功能愿望
+
+## 开发
+
+技术栈：Tauri 2（Rust）+ React 19 + TypeScript + Vite，pnpm monorepo。
+环境用 [mise](https://mise.jdx.dev/) 管理（node 24 / rust 1.97 / pnpm 11）。
+
+```bash
+mise install        # 安装工具链
+pnpm install        # 安装依赖
+pnpm dev            # 开发模式（Vite + Tauri）
+pnpm build          # 构建安装包
+pnpm -r typecheck   # 全仓类型检查
+```
+
+发版：提交遵循 [Conventional Commits](https://www.conventionalcommits.org/zh-hans/)，
+release-please 自动维护 Release PR，合并即打 tag 并四平台打包上传。
+
+离线回归：`scripts/test-scan.ts`（课程整理引擎）、`scripts/test-bpm.ts`（BPM 识别）、
+`scripts/diag-bpm.ts`（用真实伴奏诊断节拍识别，坏案例可直接转化为校准数据）。
+
 ## 已知限制
 
-- 视频/音频解码依赖系统 WebView（macOS 为 WKWebView），mkv / avi / ogg 等格式暂不支持
-- Guitar Pro 谱为纯看谱渲染（不含 alphaTab 自带的音频播放）
-- 区域分离为独立窗口（类 DevTools detach）规划中
+- 视频/音频解码依赖系统 WebView，mkv / avi 等格式暂不支持（mp4 / mov / webm / mp3 / wav / flac 等常见格式可用）
+- Guitar Pro 谱为看谱渲染，不含合成音播放
 
 ## 路线图
 
-- [ ] 区域分离为独立窗口（Tauri 多窗口 + 状态同步）
-- [ ] 手动编辑课节（跨文件夹添加资源、调整顺序）
-- [ ] 更多工具：AB 段落循环、调音器、录音对比
+- [ ] AB 段落循环（练习刚需）
+- [ ] 直接连接网盘导入课程
+- [ ] 更多练习工具：调音器、录音对比
+- [ ] 区域分离为独立窗口
+
+想要某个功能？来 [Discussions](https://github.com/HsiaoKang/learning-house/discussions) 投票或提出来。
 
 ## 协议
 
-本项目核心以 [AGPL-3.0](LICENSE) 协议开源：你可以自由使用、修改与分发，
-但基于本项目的衍生作品（包括以网络服务形式提供）必须以相同协议开源。
-如需商业授权或闭源集成，请通过 issue 联系作者。
+[AGPL-3.0](LICENSE)：自由使用、修改与分发；基于本项目的衍生作品（包括以网络服务形式提供）必须以相同协议开源。商业授权请通过 Issue 联系作者。

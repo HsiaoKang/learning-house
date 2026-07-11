@@ -9,7 +9,7 @@
  *
  * 用法: pnpm dlx tsx scripts/test-bpm.ts
  */
-import { analyzeEnvelope, beatAlignmentScore, snapBpmToRatios } from "../apps/desktop/src/lib/bpmDetect";
+import { analyzeEnvelope, beatAlignmentScore, bpmFromFilename, snapBpmToRatios } from "../apps/desktop/src/lib/bpmDetect";
 
 /** 包络格宽（与 bpmDetect 的 ENVELOPE_WIN_SEC 一致） */
 const STEP_SEC = 0.01;
@@ -97,6 +97,23 @@ results.push(
   checkSnap("识别100人拍97保持100", 100, 97, 100),
   // 人拍远离一切比率候选：不吸附（调用方按原值应用）
   checkSnap("识别120人拍70不吸附", 120, 70, null),
+);
+
+/** 文件名 BPM 标注解析断言 */
+function checkTag(name: string, path: string, want: number | null): boolean {
+  const got = bpmFromFilename(path);
+  const ok = got === want;
+  console.log(`[${ok ? "PASS" : "FAIL"}] ${name} -> ${got}（期望 ${want}）`);
+  return ok;
+}
+
+results.push(
+  // 核心课压小指场景：作者以「速度」标注（真 180，声学域被误判 90 的根治）
+  checkTag("文件名·速度标注", "/x/第四集：压小指练习（180速度不带节拍器）.wav", 180),
+  checkTag("文件名·bpm标注", "/x/第十二集：即兴创作（120bpm）.mp3", 120),
+  checkTag("文件名·原速标注", "/x/第一集：16分音符（原速100bpm）.mp3", 100),
+  checkTag("文件名·无标注", "/x/全闷音练习曲伴奏.mp3", null),
+  checkTag("文件名·课号非速度", "/x/33：击勾弦进阶练习曲伴奏 .mp3", null),
 );
 
 process.exit(results.every(Boolean) ? 0 : 1);

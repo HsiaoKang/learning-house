@@ -74,6 +74,13 @@ export function AudioPlayerBar(props: AudioPlayerBarProps) {
     onActiveResourceChange?.(active?.path ?? null);
   }, [active?.path, onActiveResourceChange]);
 
+  // 课节内切换音频：元素随 key 重建（不发 pause 事件），同步复位 UI 状态
+  useEffect(() => {
+    setPlaying(false);
+    setCurrentTime(0);
+    setDuration(0);
+  }, [active?.path]);
+
   /**
    * 读取音频元素当前进度并执行回调（元素不存在时忽略）
    *
@@ -171,9 +178,7 @@ export function AudioPlayerBar(props: AudioPlayerBarProps) {
       <span className="shrink-0 rounded border border-primary px-1.5 py-px text-xs font-semibold text-primary">
         音频
       </span>
-      <IconButton name={playing ? "pause" : "play"} label={playing ? "暂停" : "播放"} onClick={togglePlay} />
-
-      {resources.length > 1 && (
+      {resources.length > 1 ? (
         <Select
           value={String(activeIndex)}
           onChange={(v) => setActiveIndex(Number(v))}
@@ -181,7 +186,12 @@ export function AudioPlayerBar(props: AudioPlayerBarProps) {
           className="max-w-45"
           title="切换音频"
         />
+      ) : (
+        <span className="max-w-45 shrink-0 truncate text-xs text-muted-foreground" title={active.name}>
+          {active.name}
+        </span>
       )}
+      <IconButton name={playing ? "pause" : "play"} label={playing ? "暂停" : "播放"} onClick={togglePlay} />
 
       <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{formatTime(currentTime)}</span>
       <Slider

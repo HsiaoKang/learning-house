@@ -17,6 +17,8 @@ export interface BpmDetectResult {
   offset: number;
   /** 是否对库的原始检测做了倍频修正（减半/翻倍） */
   octaveAdjusted: boolean;
+  /** BPM 是否取自文件名标注（作者标注为最高可信来源，跳过声学估计） */
+  fromFilename?: boolean;
 }
 
 /** 节拍器可接受的 BPM 范围 */
@@ -57,7 +59,25 @@ const cache = new Map<string, BpmDetectResult>();
 let lastAnalysis: { path: string; envelope: Float32Array; rawBpm: number } | null = null;
 
 /**
- * 识别音频文件的 BPM 与首拍偏移
+ * 从文件名解析作者标注的 BPM（如「压小指练习（180速度）」「即兴创作（120bpm）」）。
+ * 作者标注是最高可信来源，命中时跳过声学节奏估计。
+ * （导出亦供离线回归测试）
+ *
+ * @param path 音频文件路径
+ * @returns 标注的 BPM；无标注或超出可用区间时返回 null
+ */
+export function bpmFromFilename(path: string): number | null {
+  const name = (path.split(/[\\/]/).pop() ?? path).normalize("NFC");
+  const m = /(\d{2,3})\s*(?:bpm|速度)/i.exec(name);
+  if (!m) return null;
+  const value = Number(m[1]);
+  return value >= BPM_MIN && value <= BPM_MAX ? value : null;
+}
+
+/**
+ * 识别音频文件的 BPM 与首拍偏移。
+ * 文件名带作者速度标注时直接采用（只做声学首拍定位），
+ * 否则走完整声学估计（粗估 + 倍频修正 + 相位搜索）。
  *
  * @param path 音频文件绝对路径
  * @returns 识别结果
@@ -73,18 +93,30 @@ export async function detectBpmFromFile(path: string): Promise<BpmDetectResult> 
   const ctx = new AudioContext();
   try {
     const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
-    const { guess } = await import("web-audio-beat-detector");
-    const guessed = await guess(audioBuffer);
-
     const envelope = computeEnvelope(audioBuffer);
-    const analyzed = analyzeEnvelope(envelope, guessed.bpm);
-    lastAnalysis = { path, envelope, rawBpm: guessed.bpm };
 
-    const result: BpmDetectResult = {
-      bpm: Math.min(BPM_MAX, Math.max(BPM_MIN, Math.round(analyzed.bpm))),
-      offset: Math.max(0, +analyzed.offset.toFixed(2)),
-      octaveAdjusted: Math.round(analyzed.bpm) !== Math.round(guessed.bpm),
-    };
+    const tagged = bpmFromFilename(path);
+    let result: BpmDetectResult;
+    if (tagged !== null) {
+      // 作者标注直接可信，声学只负责在该拍速下定位首拍
+      lastAnalysis = { path, envelope, rawBpm: tagged };
+      result = {
+        bpm: tagged,
+        offset: Math.max(0, +alignPhaseForBpm(envelope, tagged).toFixed(2)),
+        octaveAdjusted: false,
+        fromFilename: true,
+      };
+    } else {
+      const { guess } = await import("web-audio-beat-detector");
+      const guessed = await guess(audioBuffer);
+      const analyzed = analyzeEnvelope(envelope, guessed.bpm);
+      lastAnalysis = { path, envelope, rawBpm: guessed.bpm };
+      result = {
+        bpm: Math.min(BPM_MAX, Math.max(BPM_MIN, Math.round(analyzed.bpm))),
+        offset: Math.max(0, +analyzed.offset.toFixed(2)),
+        octaveAdjusted: Math.round(analyzed.bpm) !== Math.round(guessed.bpm),
+      };
+    }
     cache.set(path, result);
     return result;
   } finally {

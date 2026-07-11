@@ -247,11 +247,12 @@ export function ClassroomPage(props: ClassroomPageProps) {
     if (!path || detectingBpm) return;
     setDetectingBpm(true);
     try {
-      const { bpm, offset, octaveAdjusted } = await detectBpmFromFile(path);
+      const { bpm, offset, octaveAdjusted, fromFilename } = await detectBpmFromFile(path);
       metronome.updateOptions({ bpm });
       metronome.setSync({ firstBeatOffset: offset });
       persistAudioMeta({ bpm, firstBeatOffset: offset }, false);
-      toast(`已识别伴奏：${bpm} BPM${octaveAdjusted ? "（已修正倍频）" : ""} · 首拍 ${offset}s，不准可用 TAP 拍击校正`);
+      const source = fromFilename ? "（文件名标注）" : octaveAdjusted ? "（已修正倍频）" : "";
+      toast(`已识别伴奏：${bpm} BPM${source} · 首拍 ${offset}s，不准可用 TAP 拍击校正`);
     } catch {
       toast("识别失败：节奏特征不明显或文件无法解码");
     } finally {

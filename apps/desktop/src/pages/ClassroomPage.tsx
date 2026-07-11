@@ -110,7 +110,7 @@ export function ClassroomPage(props: ClassroomPageProps) {
     return (
       <div className="flex h-full flex-col">
         <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border bg-card px-3.5">
-          <IconButton name="back" label="返回课程库" onClick={onBack} />
+          <IconButton name="home" label="返回课程库" onClick={onBack} />
           <span className="text-[13px] text-muted-foreground">{course.name}</span>
         </header>
         <EmptyState title="该课程没有课节，请在课程库重新扫描或检查文件夹内容。" />
@@ -134,7 +134,7 @@ export function ClassroomPage(props: ClassroomPageProps) {
   return (
     <div className="flex h-full flex-col">
       <header className="flex h-12 shrink-0 items-center gap-2.5 border-b border-border bg-card px-3.5">
-        <IconButton name="back" label="返回课程库" onClick={onBack} />
+        <IconButton name="home" label="返回课程库" onClick={onBack} />
 
         {/* 课节下拉即页面标题（课节名自带编号时不再重复加序号） */}
         <Select

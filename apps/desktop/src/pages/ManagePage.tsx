@@ -186,7 +186,7 @@ export function ManagePage({ course, onBack, onSave }: ManagePageProps) {
     <div className="flex h-full flex-col">
       <header className="flex h-12 shrink-0 items-center justify-between gap-3 border-b border-border bg-card px-3.5">
         <div className="flex min-w-0 items-center gap-2">
-          <IconButton name="back" label="返回课程库" onClick={() => void back()} />
+          <IconButton name="home" label="返回课程库" onClick={() => void back()} />
           <span className="truncate text-[15px] font-semibold">管理课节 · {course.name}</span>
         </div>
         <div className="flex shrink-0 items-center gap-3">

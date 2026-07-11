@@ -11,7 +11,7 @@ import { mediaSrc } from "../lib/platform";
 import { formatTime } from "../lib/format";
 import type { MediaEngineControl } from "../hooks/useMetronome";
 import type { LessonResource } from "../types";
-import { RateGroup } from "./RateGroup";
+import { RateSelect } from "./RateSelect";
 
 interface AudioPlayerBarProps {
   /** 当前课节的音频资源列表（非空时才渲染本组件） */
@@ -158,7 +158,7 @@ export function AudioPlayerBar(props: AudioPlayerBarProps) {
       />
       <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{formatTime(duration)}</span>
 
-      <RateGroup value={rate} onChange={changeRate} />
+      <RateSelect value={rate} onChange={changeRate} />
 
       <Checkbox checked={loop} onChange={setLoop} label="循环" title="播放到结尾自动从头循环" />
 

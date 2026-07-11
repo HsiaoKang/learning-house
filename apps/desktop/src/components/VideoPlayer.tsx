@@ -7,13 +7,14 @@
  * 一律恢复并提示，限时可撤销回开头。媒体事件转发给节拍器联动。
  */
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
+
 import { AnimatePresence, motion } from "motion/react";
 import { ContextMenu, EmptyState, Icon, IconButton, Slider, Tabs, cn } from "@learning-house/ui";
-import { mediaSrc } from "../lib/platform";
+import { IS_TAURI, mediaSrc } from "../lib/platform";
 import { formatTime } from "../lib/format";
 import type { MediaEngineControl } from "../hooks/useMetronome";
 import type { LessonResource } from "../types";
-import { RateGroup } from "./RateGroup";
+import { RateSelect } from "./RateSelect";
 
 /** 续播位置保存节流间隔（毫秒） */
 const POSITION_SAVE_INTERVAL_MS = 3000;
@@ -69,6 +70,8 @@ export function VideoPlayer(props: VideoPlayerProps) {
   const coverHackRef = useRef(false);
   /** 取消进行中的封面渲染流程 */
   const coverCleanupRef = useRef<(() => void) | null>(null);
+  /** 全屏态（Tauri 窗口全屏 + 视频容器应用内铺满） */
+  const [fullscreen, setFullscreen] = useState(false);
 
   // 课节切换（资源列表变化）时回到第一个视频并复位控制层
   useEffect(() => {
@@ -189,14 +192,39 @@ export function VideoPlayer(props: VideoPlayerProps) {
   };
 
   /**
-   * 进入/退出全屏（以视频容器为全屏对象，控制层一起放大）
+   * 进入/退出全屏。
+   * 关键节点：WKWebView 默认禁用元素全屏 API，改用 Tauri 窗口级全屏
+   * （占满整个显示器）+ 视频容器应用内铺满的组合；浏览器环境降级为元素全屏
    */
-  const toggleFullscreen = () => {
+  const toggleFullscreen = useCallback(async () => {
+    if (IS_TAURI) {
+      const { getCurrentWindow } = await import("@tauri-apps/api/window");
+      const win = getCurrentWindow();
+      const next = !(await win.isFullscreen());
+      await win.setFullscreen(next);
+      setFullscreen(next);
+      return;
+    }
     const container = containerRef.current;
     if (!container) return;
-    if (document.fullscreenElement) void document.exitFullscreen();
-    else void container.requestFullscreen();
-  };
+    if (document.fullscreenElement) {
+      void document.exitFullscreen();
+      setFullscreen(false);
+    } else {
+      void container.requestFullscreen();
+      setFullscreen(true);
+    }
+  }, []);
+
+  // 全屏时 Esc 退出
+  useEffect(() => {
+    if (!fullscreen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.code === "Escape") void toggleFullscreen();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [fullscreen, toggleFullscreen]);
 
   /**
    * timeupdate 驱动：刷新控制层 + 节流保存续播位置 + 节拍器对齐
@@ -246,7 +274,13 @@ export function VideoPlayer(props: VideoPlayerProps) {
         </div>
       )}
       <ContextMenu items={VIDEO_MENU_ITEMS} onSelect={handleMenu}>
-        <div ref={containerRef} className="group relative flex min-h-0 flex-1 flex-col bg-stage">
+        <div
+          ref={containerRef}
+          className={cn(
+            "group relative flex min-h-0 flex-1 flex-col bg-stage",
+            fullscreen && "fixed inset-0 z-50",
+          )}
+        >
           <video
             key={active.path}
             ref={videoRef}
@@ -255,7 +289,7 @@ export function VideoPlayer(props: VideoPlayerProps) {
             playsInline
             preload="auto"
             onClick={togglePlay}
-            onDoubleClick={toggleFullscreen}
+            onDoubleClick={() => void toggleFullscreen()}
             onLoadedData={handleLoadedData}
             onDurationChange={() => setDuration(videoRef.current?.duration ?? 0)}
             onVolumeChange={() => {
@@ -349,7 +383,7 @@ export function VideoPlayer(props: VideoPlayerProps) {
               }}
               aria-label="播放进度"
             />
-            <RateGroup value={rate} onChange={(r) => videoRef.current && (videoRef.current.playbackRate = r)} />
+            <RateSelect onDark value={rate} onChange={(r) => videoRef.current && (videoRef.current.playbackRate = r)} />
             <IconButton
               name={muted || volume === 0 ? "volumeMute" : "volume"}
               label={muted ? "取消静音" : "静音"}
@@ -380,10 +414,10 @@ export function VideoPlayer(props: VideoPlayerProps) {
             />
             <IconButton
               name="fullscreen"
-              label="全屏"
+              label={fullscreen ? "退出全屏" : "全屏"}
               size="sm"
               className="text-white hover:bg-white/15 hover:text-white"
-              onClick={toggleFullscreen}
+              onClick={() => void toggleFullscreen()}
             />
           </div>
         </div>

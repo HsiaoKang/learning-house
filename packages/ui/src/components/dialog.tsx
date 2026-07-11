@@ -30,6 +30,8 @@ export function Modal({ open, onClose, title, children, widthClassName = "w-[340
             容器不拦截事件，点击遮罩关闭的行为不受影响 */}
         <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center p-6">
           <DialogPrimitive.Content
+            // 关键节点：不自动聚焦首个元素，避免关闭按钮的 Tooltip 随弹窗立即弹出
+            onOpenAutoFocus={(e) => e.preventDefault()}
             className={cn(
               "pointer-events-auto flex max-h-full flex-col gap-3.5 overflow-y-auto rounded-xl border border-border bg-card p-4 shadow-2xl",
               "data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95",

@@ -19,7 +19,7 @@ import {
 } from "@learning-house/ui";
 import { COURSE_TYPE_LABELS, type Course, type CourseType } from "../types";
 import { showConfirm, showMessage } from "../lib/dialogs";
-import { openFeedbackPage } from "../lib/feedback";
+import { FEEDBACK_EMAIL, openFeedbackEmail, openFeedbackPage } from "../lib/feedback";
 
 interface LibraryPageProps {
   courses: Course[];
@@ -71,6 +71,8 @@ export function LibraryPage(props: LibraryPageProps) {
     themeToggle,
   } = props;
   const [importOpen, setImportOpen] = useState(false);
+  /** 反馈渠道选择弹窗 */
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
   /** AI 整理会话（提示词 + 目标文件夹 + 用户贴回的结果） */
   const [aiSession, setAiSession] = useState<{ prompt: string; rootDir: string } | null>(null);
   const [pasted, setPasted] = useState("");
@@ -150,11 +152,7 @@ export function LibraryPage(props: LibraryPageProps) {
           <span className="text-[15px] font-bold tracking-wide">Learning House</span>
         </div>
         <div className="flex items-center gap-2">
-          <IconButton
-            name="feedback"
-            label="反馈问题或建议（打开 GitHub Issue，已预填环境信息）"
-            onClick={() => void openFeedbackPage()}
-          />
+          <IconButton name="feedback" label="反馈问题或建议" onClick={() => setFeedbackOpen(true)} />
           {themeToggle}
           <Button variant="primary" icon="plus" onClick={() => setImportOpen(true)}>
             导入课程文件夹
@@ -327,6 +325,35 @@ export function LibraryPage(props: LibraryPageProps) {
               {importing ? "导入中…" : "校验并导入"}
             </Button>
           </div>
+        </div>
+      </Modal>
+
+      <Modal open={feedbackOpen} onClose={() => setFeedbackOpen(false)} title="反馈问题或建议" widthClassName="w-[360px]">
+        <p className="text-[13px] leading-relaxed text-muted-foreground">
+          两种方式都会自动带上应用版本与系统信息，直接描述问题即可。
+        </p>
+        <div className="flex flex-col gap-2">
+          <Button
+            variant="solid"
+            onClick={() => {
+              setFeedbackOpen(false);
+              void openFeedbackPage();
+            }}
+          >
+            <Icon name="feedback" size="sm" />
+            GitHub Issue（推荐，可跟进讨论）
+          </Button>
+          <Button
+            variant="solid"
+            onClick={() => {
+              setFeedbackOpen(false);
+              void openFeedbackEmail();
+            }}
+          >
+            <Icon name="mail" size="sm" />
+            发送邮件（无需注册账号）
+          </Button>
+          <p className="text-center text-xs text-muted-foreground/70">邮箱：{FEEDBACK_EMAIL}</p>
         </div>
       </Modal>
     </div>

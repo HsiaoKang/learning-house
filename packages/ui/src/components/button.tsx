@@ -5,6 +5,7 @@ import { forwardRef, type ButtonHTMLAttributes } from "react";
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "../lib/utils";
 import { Icon, type IconName, type IconProps } from "./icon";
+import { Tooltip } from "./tooltip";
 
 const buttonVariants = cva(
   "inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md text-[13px] font-medium transition-colors disabled:pointer-events-none disabled:opacity-40 [&_svg]:shrink-0",
@@ -45,16 +46,18 @@ export interface ButtonProps
 }
 
 /**
- * 通用按钮
+ * 通用按钮（title 用自绘 Tooltip 呈现，规避原生延迟）
  *
  * @param props variant 视觉变体；tone 语气；size 尺寸；active 激活态；icon 左侧图标
  */
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, tone, size, active, icon, children, ...props }, ref) => (
-    <button ref={ref} className={cn(buttonVariants({ variant, tone, size, active }), className)} {...props}>
-      {icon && <Icon name={icon} size={size === "sm" ? "sm" : "md"} />}
-      {children}
-    </button>
+  ({ className, variant, tone, size, active, icon, children, title, ...props }, ref) => (
+    <Tooltip content={title}>
+      <button ref={ref} className={cn(buttonVariants({ variant, tone, size, active }), className)} {...props}>
+        {icon && <Icon name={icon} size={size === "sm" ? "sm" : "md"} />}
+        {children}
+      </button>
+    </Tooltip>
   ),
 );
 Button.displayName = "Button";
@@ -74,23 +77,26 @@ const ICON_BUTTON_SIZES = { sm: "size-6", md: "size-[30px]", lg: "size-9" } as c
 /**
  * 纯图标按钮（关闭/返回/缩放等）
  *
+ * 悬停提示用自绘 Tooltip（title/label），规避原生 title 的 2-3 秒延迟
+ *
  * @param props name 图标名；label 无障碍标签；size 尺寸
  */
 export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
   ({ className, name, size = "md", iconSize, label, title, ...props }, ref) => (
-    <button
-      ref={ref}
-      aria-label={label}
-      title={title ?? label}
-      className={cn(
-        "inline-flex items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground disabled:pointer-events-none disabled:opacity-40",
-        ICON_BUTTON_SIZES[size],
-        className,
-      )}
-      {...props}
-    >
-      <Icon name={name} size={iconSize ?? (size === "lg" ? "lg" : "md")} />
-    </button>
+    <Tooltip content={title ?? label}>
+      <button
+        ref={ref}
+        aria-label={label}
+        className={cn(
+          "inline-flex items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground disabled:pointer-events-none disabled:opacity-40",
+          ICON_BUTTON_SIZES[size],
+          className,
+        )}
+        {...props}
+      >
+        <Icon name={name} size={iconSize ?? (size === "lg" ? "lg" : "md")} />
+      </button>
+    </Tooltip>
   ),
 );
 IconButton.displayName = "IconButton";

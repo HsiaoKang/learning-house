@@ -7,7 +7,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { AnimatePresence, motion } from "motion/react";
-import { IconButton, Toaster, toast } from "@learning-house/ui";
+import { IconButton, Toaster, TooltipProvider, toast } from "@learning-house/ui";
 import { LibraryPage } from "./pages/LibraryPage";
 import { ClassroomPage } from "./pages/ClassroomPage";
 import { ManagePage } from "./pages/ManagePage";
@@ -464,7 +464,7 @@ function App() {
   );
 
   return (
-    <>
+    <TooltipProvider>
       <Toaster />
       <AnimatePresence mode="wait">
       {managingCourse ? (
@@ -531,7 +531,7 @@ function App() {
         </motion.div>
       )}
       </AnimatePresence>
-    </>
+    </TooltipProvider>
   );
 }
 

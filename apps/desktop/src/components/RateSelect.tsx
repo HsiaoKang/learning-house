@@ -6,7 +6,7 @@
 import { Select, cn } from "@learning-house/ui";
 
 /** 可选倍速档位（慢速练习是核心场景） */
-export const PLAYBACK_RATES = [0.5, 0.65, 0.75, 0.85, 1, 1.25, 1.5];
+export const PLAYBACK_RATES = [0.5, 0.75, 1, 1.25, 1.5];
 
 interface RateSelectProps {
   /** 当前倍速 */

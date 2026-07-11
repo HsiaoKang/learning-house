@@ -6,6 +6,7 @@
 /// - store: 提供 JSON 键值存储（课程库、学习进度、应用设置）
 /// - updater: 应用内检查/下载/安装更新（GitHub Releases 分发）
 /// - process: 更新安装完成后重启应用
+/// - opener: 在系统浏览器打开外部链接（用户反馈入口）
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -14,6 +15,7 @@ pub fn run() {
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_opener::init())
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

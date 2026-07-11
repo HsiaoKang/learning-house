@@ -19,6 +19,7 @@ import {
 } from "@learning-house/ui";
 import { COURSE_TYPE_LABELS, type Course, type CourseType } from "../types";
 import { showConfirm, showMessage } from "../lib/dialogs";
+import { openFeedbackPage } from "../lib/feedback";
 
 interface LibraryPageProps {
   courses: Course[];
@@ -149,6 +150,11 @@ export function LibraryPage(props: LibraryPageProps) {
           <span className="text-[15px] font-bold tracking-wide">Learning House</span>
         </div>
         <div className="flex items-center gap-2">
+          <IconButton
+            name="feedback"
+            label="反馈问题或建议（打开 GitHub Issue，已预填环境信息）"
+            onClick={() => void openFeedbackPage()}
+          />
           {themeToggle}
           <Button variant="primary" icon="plus" onClick={() => setImportOpen(true)}>
             导入课程文件夹

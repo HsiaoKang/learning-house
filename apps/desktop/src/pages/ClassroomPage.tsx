@@ -14,7 +14,7 @@ import { AudioPlayerBar } from "../components/AudioPlayerBar";
 import { DocViewer } from "../components/DocViewer";
 import { ResourcePicker } from "../components/ResourcePicker";
 import { ToolBar } from "../components/ToolBar";
-import { detectBpmFromFile } from "../lib/bpmDetect";
+import { detectBpmFromFile, snapTapToGrid } from "../lib/bpmDetect";
 import { loadMediaMeta, saveMediaMeta, type AudioBeatMeta, type CourseMediaMeta } from "../lib/mediaMeta";
 import { useMetronome, type SyncConfig } from "../hooks/useMetronome";
 import { useMediaShortcuts, type ShortcutTarget } from "../hooks/useMediaShortcuts";
@@ -251,13 +251,34 @@ export function ClassroomPage(props: ClassroomPageProps) {
       metronome.updateOptions({ bpm });
       metronome.setSync({ firstBeatOffset: offset });
       persistAudioMeta({ bpm, firstBeatOffset: offset }, false);
-      toast(`已识别伴奏：${bpm} BPM${octaveAdjusted ? "（已修正倍频）" : ""} · 首拍 ${offset}s`);
+      toast(`已识别伴奏：${bpm} BPM${octaveAdjusted ? "（已修正倍频）" : ""} · 首拍 ${offset}s，不准可用 TAP 拍击校正`);
     } catch {
       toast("识别失败：节奏特征不明显或文件无法解码");
     } finally {
       setDetectingBpm(false);
     }
   }, [detectingBpm, metronome.updateOptions, metronome.setSync, persistAudioMeta]);
+
+  /**
+   * TAP 测速结果应用：当前伴奏识别过时，把人拍的粗略节奏吸附到
+   * 识别网格的比率候选（解决 4/3 类纯信号不可判定的节奏歧义），
+   * 用精确拍速重新定位首拍并落盘为手动校准；无法吸附时按原值应用
+   */
+  const applyTapBpm = useCallback(
+    (tapBpm: number) => {
+      const path = currentAudioPathRef.current;
+      const snapped = path ? snapTapToGrid(path, tapBpm) : null;
+      if (snapped) {
+        metronome.updateOptions({ bpm: snapped.bpm });
+        metronome.setSync({ firstBeatOffset: snapped.offset });
+        persistAudioMeta({ bpm: snapped.bpm, firstBeatOffset: snapped.offset }, true);
+        toast(`已按 TAP 校正：${snapped.bpm} BPM · 首拍 ${snapped.offset}s`);
+        return;
+      }
+      updateMetronomeOptions({ bpm: tapBpm });
+    },
+    [metronome.updateOptions, metronome.setSync, persistAudioMeta, updateMetronomeOptions],
+  );
 
   if (!lesson) {
     return (
@@ -366,6 +387,7 @@ export function ClassroomPage(props: ClassroomPageProps) {
             getMediaTime,
             detectingBpm,
             onDetectBpm: () => void detectBpm(),
+            onTapBpm: applyTapBpm,
           }}
         />
       </div>

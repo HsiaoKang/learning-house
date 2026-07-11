@@ -53,6 +53,9 @@ const TEMPO_PRIOR_CENTER = 95;
 /** 路径 -> 识别结果缓存（解码整首歌成本高，同文件只算一次） */
 const cache = new Map<string, BpmDetectResult>();
 
+/** 最近一次分析的中间产物（TAP 吸附校正复用，免重复解码） */
+let lastAnalysis: { path: string; envelope: Float32Array; rawBpm: number } | null = null;
+
 /**
  * 识别音频文件的 BPM 与首拍偏移
  *
@@ -75,6 +78,7 @@ export async function detectBpmFromFile(path: string): Promise<BpmDetectResult> 
 
     const envelope = computeEnvelope(audioBuffer);
     const analyzed = analyzeEnvelope(envelope, guessed.bpm);
+    lastAnalysis = { path, envelope, rawBpm: guessed.bpm };
 
     const result: BpmDetectResult = {
       bpm: Math.min(BPM_MAX, Math.max(BPM_MIN, Math.round(analyzed.bpm))),
@@ -86,6 +90,65 @@ export async function detectBpmFromFile(path: string): Promise<BpmDetectResult> 
   } finally {
     void ctx.close();
   }
+}
+
+/** 节奏估计的经典混淆比率族（倍频 + 附点/三连音关系） */
+const SNAP_RATIOS = [1 / 3, 1 / 2, 2 / 3, 3 / 4, 1, 4 / 3, 3 / 2, 2, 3];
+
+/** TAP 吸附容差（对数距离）：手拍精度约 ±8% */
+const SNAP_TOLERANCE = Math.log(1.08);
+
+/**
+ * 把用户 TAP 拍出的粗略 BPM 吸附到检测网格的比率候选上。
+ * 场景：伴奏律动与谱面拍速是 4/3 等非倍频关系时（如附点八分鼓型），
+ * 纯信号无法判定，人拍出大致节奏、机器给出精确数值。
+ * （导出亦供离线回归测试）
+ *
+ * @param rawBpm 检测器给出的原始 BPM（网格基准）
+ * @param tapBpm 用户 TAP 的粗略 BPM
+ * @returns 吸附后的精确 BPM；无足够接近的候选时返回 null
+ */
+export function snapBpmToRatios(rawBpm: number, tapBpm: number): number | null {
+  let best: number | null = null;
+  let bestDist = SNAP_TOLERANCE;
+  for (const ratio of SNAP_RATIOS) {
+    const candidate = rawBpm * ratio;
+    if (candidate < BPM_MIN || candidate > BPM_MAX) continue;
+    const dist = Math.abs(Math.log(tapBpm / candidate));
+    if (dist <= bestDist) {
+      bestDist = dist;
+      best = candidate;
+    }
+  }
+  return best !== null ? Math.round(best) : null;
+}
+
+/**
+ * TAP 校正：吸附 BPM 后用该拍速在伴奏上重新做相位搜索与拍点回溯，
+ * 返回精确的 BPM 与首拍偏移
+ *
+ * @param path 伴奏文件绝对路径（需已做过识别，复用其分析产物）
+ * @param tapBpm 用户 TAP 的粗略 BPM
+ * @returns 校正结果；该伴奏未识别过或 TAP 与网格族相距过远时返回 null
+ */
+export function snapTapToGrid(path: string, tapBpm: number): { bpm: number; offset: number } | null {
+  if (!lastAnalysis || lastAnalysis.path !== path) return null;
+  const snapped = snapBpmToRatios(lastAnalysis.rawBpm, tapBpm);
+  if (snapped === null) return null;
+  const aligned = alignPhaseForBpm(lastAnalysis.envelope, snapped);
+  return { bpm: snapped, offset: Math.max(0, +aligned.toFixed(2)) };
+}
+
+/**
+ * 用指定 BPM 在包络上做相位搜索并回溯知觉拍点
+ *
+ * @param envelope 全曲包络
+ * @param bpm 拍速
+ * @returns 首拍时刻（秒）
+ */
+function alignPhaseForBpm(envelope: Float32Array, bpm: number): number {
+  const aligned = alignPhase(envelope, 60 / bpm / ENVELOPE_WIN_SEC);
+  return refineToRise(envelope, aligned.phaseStep * ENVELOPE_WIN_SEC);
 }
 
 /**

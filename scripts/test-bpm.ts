@@ -9,7 +9,7 @@
  *
  * 用法: pnpm dlx tsx scripts/test-bpm.ts
  */
-import { analyzeEnvelope, beatAlignmentScore } from "../apps/desktop/src/lib/bpmDetect";
+import { analyzeEnvelope, beatAlignmentScore, snapBpmToRatios } from "../apps/desktop/src/lib/bpmDetect";
 
 /** 包络格宽（与 bpmDetect 的 ENVELOPE_WIN_SEC 一致） */
 const STEP_SEC = 0.01;
@@ -79,5 +79,24 @@ const results = [
   // 同强八分下拍点与反拍物理等强，对齐度必然为 0，豁免该项断言）
   check("真100同强八分被报200", synthesize(100, 60, 0.35, 1.0), 200, 100, 0.35, 0),
 ];
+
+/** TAP 吸附纯函数断言 */
+function checkSnap(name: string, rawBpm: number, tapBpm: number, want: number | null): boolean {
+  const got = snapBpmToRatios(rawBpm, tapBpm);
+  const ok = got === want;
+  console.log(`[${ok ? "PASS" : "FAIL"}] ${name} -> snap(${rawBpm}, tap ${tapBpm}) = ${got}（期望 ${want}）`);
+  return ok;
+}
+
+results.push(
+  // 推弦练习场景：鼓型 4/3 律动被识别为 120，人拍 ~88 吸附回谱面 90
+  checkSnap("识别120人拍88吸附90", 120, 88, 90),
+  // 倍频场景：识别 100 人拍 ~52 吸附到 50
+  checkSnap("识别100人拍52吸附50", 100, 52, 50),
+  // 人拍与识别一致：保持
+  checkSnap("识别100人拍97保持100", 100, 97, 100),
+  // 人拍远离一切比率候选：不吸附（调用方按原值应用）
+  checkSnap("识别120人拍70不吸附", 120, 70, null),
+);
 
 process.exit(results.every(Boolean) ? 0 : 1);

@@ -30,6 +30,8 @@ interface MetronomeBarProps {
   detectingBpm: boolean;
   /** 识别当前伴奏 BPM 并自动卡点（自动设置 BPM 与首拍偏移） */
   onDetectBpm: () => void;
+  /** TAP 测速结果应用（外层可吸附到识别网格做精确校正） */
+  onTapBpm: (bpm: number) => void;
 }
 
 /**
@@ -50,6 +52,7 @@ export function MetronomeBar(props: MetronomeBarProps) {
     getMediaTime,
     detectingBpm,
     onDetectBpm,
+    onTapBpm,
   } = props;
   const [tapOpen, setTapOpen] = useState(false);
 
@@ -82,7 +85,7 @@ export function MetronomeBar(props: MetronomeBarProps) {
       <Button variant="ghost" onClick={() => setTapOpen(true)} title="打开 Tap Tempo 浮窗测速">
         TAP
       </Button>
-      <TapTempoModal open={tapOpen} onClose={() => setTapOpen(false)} onApply={(bpm) => updateOptions({ bpm })} />
+      <TapTempoModal open={tapOpen} onClose={() => setTapOpen(false)} onApply={onTapBpm} />
 
       <div
         className="flex shrink-0 items-center gap-2"

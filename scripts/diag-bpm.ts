@@ -33,7 +33,7 @@ const envelope = computeOnsetEnvelope(samples, SAMPLE_RATE);
 console.log(`时长 ${(envelope.length * WIN_SEC).toFixed(1)}s，ODF ${envelope.length} 格`);
 
 /**
- * 打印某个候选 BPM 的判别信号（复制 bpmDetect.alignPhase 的口径）
+ * 打印某个候选 BPM 的判别信号（含小节级强拍突出度）
  */
 function inspect(bpm: number): void {
   const periodSteps = 60 / bpm / WIN_SEC;
@@ -51,8 +51,14 @@ function inspect(bpm: number): void {
   const odd = mean(envelope, bestPhase + periodSteps, periodSteps * 2);
   const on = mean(envelope, bestPhase, periodSteps);
   const off = mean(envelope, bestPhase + periodSteps / 2, periodSteps);
+  // 小节级（4/4 假设）：4 个小节相位里最突出的强拍 / 全拍均值
+  let bestBar = 0;
+  for (let b = 0; b < 4; b++) {
+    const barHead = mean(envelope, bestPhase + b * periodSteps, periodSteps * 4);
+    if (barHead > bestBar) bestBar = barHead;
+  }
   console.log(
-    `BPM ${bpm}: 相位 ${(bestPhase * WIN_SEC).toFixed(2)}s | 奇/偶拍比 ${(odd / even).toFixed(3)} | 反拍/拍点比 ${(off / on).toFixed(3)}`,
+    `BPM ${bpm}: 相位 ${(bestPhase * WIN_SEC).toFixed(2)}s | 奇/偶拍比 ${(odd / even).toFixed(3)} | 反拍/拍点比 ${(off / on).toFixed(3)} | 小节强拍/全拍 ${(bestBar / on).toFixed(3)}`,
   );
 }
 

@@ -36,6 +36,8 @@ interface ToolBarProps {
     detectingBpm: boolean;
     /** 识别当前伴奏 BPM 并自动卡点 */
     onDetectBpm: () => void;
+    /** TAP 测速结果应用（吸附识别网格精确校正） */
+    onTapBpm: (bpm: number) => void;
   };
 }
 
@@ -72,6 +74,7 @@ export function ToolBar({ tool, onToolChange, metronome }: ToolBarProps) {
             getMediaTime={metronome.getMediaTime}
             detectingBpm={metronome.detectingBpm}
             onDetectBpm={metronome.onDetectBpm}
+            onTapBpm={metronome.onTapBpm}
           />
         ) : (
           <span className="block px-3.5 text-[13px] text-muted-foreground">未启用工具</span>

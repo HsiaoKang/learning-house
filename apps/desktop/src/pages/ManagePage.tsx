@@ -25,6 +25,8 @@ interface ManagePageProps {
   onBack: () => void;
   /** 保存草稿：写清单并按清单重扫，成功后由 App 返回课程库 */
   onSave: (manifest: CourseManifest) => Promise<boolean>;
+  /** 进入该课程的上课页（整理完成后的顺路入口） */
+  onStartLearning: () => void;
 }
 
 /** 资源类别对应的列表图标 */
@@ -44,7 +46,7 @@ const OUT_TARGET = "__out__";
  *
  * @param props 见 ManagePageProps 字段说明
  */
-export function ManagePage({ course, onBack, onSave }: ManagePageProps) {
+export function ManagePage({ course, onBack, onSave, onStartLearning }: ManagePageProps) {
   const [lessons, setLessons] = useState<DraftLesson[]>(() =>
     course.lessons.map((l, i) => ({
       key: `l${i}`,
@@ -139,20 +141,20 @@ export function ManagePage({ course, onBack, onSave }: ManagePageProps) {
     );
   };
 
-  /** 校验草稿并保存 */
-  const save = async () => {
+  /** 校验草稿并保存，返回是否保存成功 */
+  const save = async (): Promise<boolean> => {
     if (lessons.some((l) => !l.name.trim())) {
       await showMessage("存在未命名的课节，请先补全名称。", "无法保存");
-      return;
+      return false;
     }
     const nonEmpty = lessons.filter((l) => l.resources.length > 0);
     if (nonEmpty.length === 0) {
       await showMessage("至少需要一个包含资源的课节。", "无法保存");
-      return;
+      return false;
     }
     if (nonEmpty.length < lessons.length) {
       const ok = await showConfirm(`有 ${lessons.length - nonEmpty.length} 个空课节将被丢弃，继续保存吗？`);
-      if (!ok) return;
+      if (!ok) return false;
     }
     setSaving(true);
     const ok = await onSave({
@@ -161,6 +163,16 @@ export function ManagePage({ course, onBack, onSave }: ManagePageProps) {
     });
     setSaving(false);
     if (ok) setDirty(false);
+    return ok;
+  };
+
+  /** 进入上课：有未保存修改先走保存流程，保存失败则留在管理页 */
+  const startLearning = async () => {
+    if (dirty) {
+      const ok = await save();
+      if (!ok) return;
+    }
+    onStartLearning();
   };
 
   /** 返回前的脏数据拦截 */
@@ -203,6 +215,15 @@ export function ManagePage({ course, onBack, onSave }: ManagePageProps) {
           </Button>
           <Button variant="primary" onClick={() => void save()} disabled={saving || !dirty}>
             {saving ? "保存中…" : "保存"}
+          </Button>
+          <Button
+            variant="solid"
+            icon="play"
+            onClick={() => void startLearning()}
+            disabled={saving}
+            title={dirty ? "先保存修改，然后进入上课页" : "进入该课程的上课页"}
+          >
+            进入上课
           </Button>
         </div>
       </header>

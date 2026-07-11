@@ -480,6 +480,10 @@ function App() {
             course={managingCourse}
             onBack={() => setManagingCourseId(null)}
             onSave={(manifest) => saveManagedManifest(managingCourse.id, manifest)}
+            onStartLearning={() => {
+              setActiveCourseId(managingCourse.id);
+              setManagingCourseId(null);
+            }}
           />
         </motion.div>
       ) : activeCourse ? (

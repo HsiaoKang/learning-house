@@ -74,19 +74,49 @@ export async function detectBpmFromFile(path: string): Promise<BpmDetectResult> 
     const guessed = await guess(audioBuffer);
 
     const envelope = computeEnvelope(audioBuffer);
-    const refined = refineTempoAndPhase(envelope, guessed.bpm);
-    const offset = refineToRise(envelope, refined.phaseSec);
+    const analyzed = analyzeEnvelope(envelope, guessed.bpm);
 
     const result: BpmDetectResult = {
-      bpm: Math.min(BPM_MAX, Math.max(BPM_MIN, Math.round(refined.bpm))),
-      offset: Math.max(0, +offset.toFixed(2)),
-      octaveAdjusted: Math.round(refined.bpm) !== Math.round(guessed.bpm),
+      bpm: Math.min(BPM_MAX, Math.max(BPM_MIN, Math.round(analyzed.bpm))),
+      offset: Math.max(0, +analyzed.offset.toFixed(2)),
+      octaveAdjusted: Math.round(analyzed.bpm) !== Math.round(guessed.bpm),
     };
     cache.set(path, result);
     return result;
   } finally {
     void ctx.close();
   }
+}
+
+/**
+ * 包络分析全流程（倍频修正 + 相位定位 + 知觉拍点回溯）。
+ * 从 detectBpmFromFile 拆出的纯函数，供离线端到端测试直接调用
+ *
+ * @param envelope 全曲包络
+ * @param rawBpm 库粗估的 BPM
+ * @returns 修正后的 BPM 与首拍时刻（秒，未取整）
+ */
+export function analyzeEnvelope(envelope: Float32Array, rawBpm: number): { bpm: number; offset: number } {
+  const refined = refineTempoAndPhase(envelope, rawBpm);
+  return { bpm: refined.bpm, offset: refineToRise(envelope, refined.phaseSec) };
+}
+
+/**
+ * 节拍对齐度：沿「offset + k*拍长」的节拍器拍点序列采样包络，
+ * 返回拍点能量相对反拍能量的对比度（0-1，越高说明拍点越踩在波峰上）。
+ * 端到端验收指标：识别结果打出的每一拍都应命中伴奏的能量峰
+ *
+ * @param envelope 全曲包络
+ * @param bpm 识别出的 BPM
+ * @param offsetSec 识别出的首拍时刻（秒）
+ * @returns 对齐对比度（真拍网格通常 > 0.1，错位网格趋近 0 或为负）
+ */
+export function beatAlignmentScore(envelope: Float32Array, bpm: number, offsetSec: number): number {
+  const periodSteps = 60 / bpm / ENVELOPE_WIN_SEC;
+  const startStep = offsetSec / ENVELOPE_WIN_SEC;
+  const onBeat = meanBeatEnergy(envelope, startStep, periodSteps);
+  const offBeat = meanBeatEnergy(envelope, startStep + periodSteps / 2, periodSteps);
+  return (onBeat - offBeat) / (onBeat + offBeat + 1e-9);
 }
 
 /**
@@ -224,13 +254,18 @@ function meanBeatEnergy(envelope: Float32Array, startStep: number, periodSteps: 
   return count > 0 ? sum / count : 0;
 }
 
-/** 首拍回溯搜索窗（秒） */
-const RISE_LOOKBACK_SEC = 0.1;
-const RISE_LOOKAHEAD_SEC = 0.1;
+/** 首拍回溯搜索窗（秒）：相位已由全曲网格搜索定准，只在拍点近旁找峰 */
+const RISE_LOOKBACK_SEC = 0.02;
+const RISE_LOOKAHEAD_SEC = 0.06;
+
+/** 攻击补偿的最大偏移（秒）：超过此量级的移动会拖歪整个节拍网格 */
+const RISE_MAX_SHIFT_SEC = 0.06;
 
 /**
  * 把网格相位修正到知觉拍点：能量峰值晚于听感（攻击爬升数十毫秒），
- * 在相位附近找包络峰值并回溯到爬升至 50% 的时刻
+ * 在相位近旁找包络峰值并回溯到爬升至 50% 的时刻。
+ * 关键节点：修正量限制在攻击时间量级，网格对齐（全曲拍点命中）优先于
+ * 单点听感——回溯过多会平移整个节拍网格导致后续拍全部脱靶
  *
  * @param envelope 全曲包络
  * @param phaseSec 拍网格起点（秒）
@@ -252,5 +287,6 @@ function refineToRise(envelope: Float32Array, phaseSec: number): number {
   for (let i = peakIdx; i >= startStep && envelope[i] >= peak * 0.5; i--) {
     riseIdx = i;
   }
-  return riseIdx * ENVELOPE_WIN_SEC;
+  const refined = riseIdx * ENVELOPE_WIN_SEC;
+  return Math.abs(refined - phaseSec) <= RISE_MAX_SHIFT_SEC ? refined : phaseSec;
 }

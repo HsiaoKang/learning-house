@@ -9,7 +9,7 @@
  *      pnpm dlx tsx scripts/diag-bpm.ts /tmp/xx.pcm <库粗估BPM>
  */
 import fs from "node:fs";
-import { refineTempoAndPhase } from "../apps/desktop/src/lib/bpmDetect";
+import { analyzeEnvelope, beatAlignmentScore } from "../apps/desktop/src/lib/bpmDetect";
 
 const SAMPLE_RATE = 44100;
 const WIN_SEC = 0.01;
@@ -79,5 +79,8 @@ inspect(rawBpm / 2);
 inspect(rawBpm);
 inspect(rawBpm * 2);
 
-const result = refineTempoAndPhase(envelope, rawBpm);
-console.log(`refineTempoAndPhase(${rawBpm}) -> BPM ${result.bpm}，首拍 ${result.phaseSec.toFixed(2)}s`);
+const result = analyzeEnvelope(envelope, rawBpm);
+const alignment = beatAlignmentScore(envelope, result.bpm, result.offset);
+console.log(
+  `analyzeEnvelope(${rawBpm}) -> BPM ${result.bpm}，首拍 ${result.offset.toFixed(2)}s，拍点对齐度 ${alignment.toFixed(3)}`,
+);

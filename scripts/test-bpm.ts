@@ -1,12 +1,15 @@
 /**
  * BPM 倍频判别与相位定位的离线回归测试
  *
- * 用合成包络模拟典型伴奏节奏形态，验证 refineTempoAndPhase 的
- * 倍频修正（150->75、50->100）与首拍相位定位是否符合预期。
+ * 用合成包络模拟典型伴奏节奏形态，验证端到端识别结果
+ * （analyzeEnvelope：倍频修正 + 相位定位 + 拍点回溯）：
+ * 1. BPM 与首拍数值符合期望
+ * 2. 节拍对齐度：按识别结果打拍，每一拍都应命中包络能量峰
+ *    （等价于把节拍器与伴奏叠放对波峰）
  *
  * 用法: pnpm dlx tsx scripts/test-bpm.ts
  */
-import { refineTempoAndPhase } from "../apps/desktop/src/lib/bpmDetect";
+import { analyzeEnvelope, beatAlignmentScore } from "../apps/desktop/src/lib/bpmDetect";
 
 /** 包络格宽（与 bpmDetect 的 ENVELOPE_WIN_SEC 一致） */
 const STEP_SEC = 0.01;
@@ -33,30 +36,48 @@ function synthesize(bpm: number, durationSec: number, phaseSec: number, halfBeat
   return env;
 }
 
-/** 断言并打印结果 */
-function check(name: string, actual: { bpm: number; phaseSec: number }, wantBpm: number, wantPhase: number): boolean {
+/** 对齐度合格线：识别拍点的能量对比度低于此值视为没踩上波峰 */
+const MIN_ALIGNMENT = 0.05;
+
+/**
+ * 端到端断言：数值符合期望 + 拍点对齐（节拍器叠放伴奏能对上波峰）
+ *
+ * @param minAlign 对齐度合格线；全曲同强素材物理上无强弱差异可传 0 豁免
+ */
+function check(
+  name: string,
+  env: Float32Array,
+  rawBpm: number,
+  wantBpm: number,
+  wantPhase: number,
+  minAlign = MIN_ALIGNMENT,
+): boolean {
+  const actual = analyzeEnvelope(env, rawBpm);
+  const alignment = beatAlignmentScore(env, actual.bpm, actual.offset);
   const bpmOk = Math.abs(actual.bpm - wantBpm) < 1;
-  const phaseOk = Math.abs(actual.phaseSec - wantPhase) <= 0.03;
-  const status = bpmOk && phaseOk ? "PASS" : "FAIL";
+  const phaseOk = Math.abs(actual.offset - wantPhase) <= 0.05;
+  const alignOk = alignment >= minAlign;
+  const status = bpmOk && phaseOk && alignOk ? "PASS" : "FAIL";
   console.log(
-    `[${status}] ${name} -> bpm ${actual.bpm.toFixed(1)}（期望 ${wantBpm}）,首拍 ${actual.phaseSec.toFixed(2)}s（期望 ${wantPhase}）`,
+    `[${status}] ${name} -> bpm ${actual.bpm.toFixed(1)}（期望 ${wantBpm}）,首拍 ${actual.offset.toFixed(2)}s（期望 ${wantPhase}）,对齐度 ${alignment.toFixed(3)}`,
   );
-  return bpmOk && phaseOk;
+  return bpmOk && phaseOk && alignOk;
 }
 
 const results = [
   // 梦的出口场景：真 75，半拍律动强导致库报 150（真实样本奇偶比 0.72）
-  check("真75被报150", refineTempoAndPhase(synthesize(75, 180, 0, 0.5), 150), 75, 0),
+  check("真75被报150", synthesize(75, 180, 0, 0.5), 150, 75, 0),
   // 常规场景：真 100 无半拍律动，库报对
-  check("真100报100", refineTempoAndPhase(synthesize(100, 180, 0.3, 0), 100), 100, 0.3),
+  check("真100报100", synthesize(100, 180, 0.3, 0), 100, 100, 0.3),
   // 减半误判场景：真 100，库报 50（反拍与拍点同强，应翻倍纠回）
-  check("真100被报50", refineTempoAndPhase(synthesize(100, 180, 0.3, 0), 50), 100, 0.3),
+  check("真100被报50", synthesize(100, 180, 0.3, 0), 50, 100, 0.3),
   // 33 课场景：真 100 且带弱半拍，库报对时不应被改动
-  check("真100带弱半拍", refineTempoAndPhase(synthesize(100, 180, 0.2, 0.35), 100), 100, 0.2),
+  check("真100带弱半拍", synthesize(100, 180, 0.2, 0.35), 100, 100, 0.2),
   // 33 课真实形态：连续八分音型反拍能量高（真实样本反拍比 0.91），不得误翻倍
-  check("真100反拍强不翻倍", refineTempoAndPhase(synthesize(100, 180, 0.2, 0.9), 100), 100, 0.2),
-  // sol 指型场景：真 100 全曲同强八分，库报 200（能量域无法区分，靠区间硬约束拉回）
-  check("真100同强八分被报200", refineTempoAndPhase(synthesize(100, 60, 0.35, 1.0), 200), 100, 0.35),
+  check("真100反拍强不翻倍", synthesize(100, 180, 0.2, 0.9), 100, 100, 0.2),
+  // sol 指型场景：真 100 全曲同强八分，库报 200（能量域无法区分，靠区间硬约束拉回；
+  // 同强八分下拍点与反拍物理等强，对齐度必然为 0，豁免该项断言）
+  check("真100同强八分被报200", synthesize(100, 60, 0.35, 1.0), 200, 100, 0.35, 0),
 ];
 
 process.exit(results.every(Boolean) ? 0 : 1);

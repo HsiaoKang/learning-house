@@ -37,6 +37,8 @@ export interface UseMetronomeResult {
   running: boolean;
   /** 自由模式启动/停止切换 */
   toggle: () => void;
+  /** 停止（未运行时空操作） */
+  stop: () => void;
   /** 当前拍在小节内的序号（-1 表示未运行），用于指示灯 */
   activeBeat: number;
   /** 联动配置 */
@@ -94,6 +96,14 @@ export function useMetronome(): UseMetronomeResult {
     }
   }, [engine]);
 
+  /** 停止节拍器（未运行时为空操作；课节切换等场景使用） */
+  const stop = useCallback(() => {
+    if (!engine.isRunning) return;
+    engine.stop();
+    setRunning(false);
+    setActiveBeat(-1);
+  }, [engine]);
+
   const setSync = useCallback(
     (patch: Partial<SyncConfig>) => {
       // 切换联动源时停掉正在响的节拍，避免旧源残留的错误节拍
@@ -142,5 +152,5 @@ export function useMetronome(): UseMetronomeResult {
     [engine],
   );
 
-  return { options, updateOptions, running, toggle, activeBeat, sync, setSync, bindSource };
+  return { options, updateOptions, running, toggle, stop, activeBeat, sync, setSync, bindSource };
 }

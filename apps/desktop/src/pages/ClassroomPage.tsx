@@ -7,6 +7,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button, Checkbox, EmptyState, IconButton, Select, toast } from "@learning-house/ui";
+import type { MetronomeOptions } from "@learning-house/metronome-core";
 import { SplitPane } from "../components/SplitPane";
 import { VideoPlayer } from "../components/VideoPlayer";
 import { AudioPlayerBar } from "../components/AudioPlayerBar";
@@ -14,11 +15,13 @@ import { DocViewer } from "../components/DocViewer";
 import { ResourcePicker } from "../components/ResourcePicker";
 import { ToolBar } from "../components/ToolBar";
 import { detectBpmFromFile } from "../lib/bpmDetect";
-import { useMetronome } from "../hooks/useMetronome";
+import { loadMediaMeta, saveMediaMeta, type AudioBeatMeta, type CourseMediaMeta } from "../lib/mediaMeta";
+import { useMetronome, type SyncConfig } from "../hooks/useMetronome";
 import { useMediaShortcuts, type ShortcutTarget } from "../hooks/useMediaShortcuts";
 import {
   DEFAULT_TOOL_BY_COURSE_TYPE,
   isDocKind,
+  relativePathOf,
   type AppSettings,
   type Course,
   type ToolKind,
@@ -142,9 +145,102 @@ export function ClassroomPage(props: ClassroomPageProps) {
   const currentAudioPathRef = useRef<string | null>(null);
   /** BPM 识别进行中 */
   const [detectingBpm, setDetectingBpm] = useState(false);
+  /** 课程的媒体元数据（伴奏 BPM/首拍持久化，按相对路径索引） */
+  const mediaMetaRef = useRef<CourseMediaMeta>({ audio: {} });
+
+  // 打开课程时加载媒体元数据；加载完成后对当前伴奏补一次应用（可能先于加载上报）
+  useEffect(() => {
+    mediaMetaRef.current = { audio: {} };
+    if (!course.rootDir) return;
+    let cancelled = false;
+    void loadMediaMeta(course.rootDir).then((meta) => {
+      if (cancelled) return;
+      mediaMetaRef.current = meta;
+      applyAudioMetaRef.current(currentAudioPathRef.current);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [course.id, course.rootDir]);
 
   /**
-   * 识别当前伴奏的 BPM 与首拍偏移，写入节拍器实现自动卡点
+   * 把当前伴奏的节拍参数写入媒体元数据并落盘
+   *
+   * @param patch 新的 BPM / 首拍偏移（未提供的字段沿用已有记录或当前节拍器值）
+   * @param manual 是否用户手动校准（识别覆盖时清除该标记）
+   */
+  const persistAudioMeta = useCallback(
+    (patch: Partial<AudioBeatMeta>, manual: boolean) => {
+      const rootDir = course.rootDir;
+      const abs = currentAudioPathRef.current;
+      if (!rootDir || !abs) return;
+      const key = relativePathOf(rootDir, abs);
+      const store = mediaMetaRef.current;
+      const prev = store.audio[key];
+      store.audio[key] = {
+        bpm: patch.bpm ?? prev?.bpm ?? metronome.options.bpm,
+        firstBeatOffset: patch.firstBeatOffset ?? prev?.firstBeatOffset ?? metronome.sync.firstBeatOffset,
+        manual,
+      };
+      saveMediaMeta(rootDir, store);
+    },
+    [course.rootDir, metronome.options.bpm, metronome.sync.firstBeatOffset],
+  );
+
+  /** 应用某伴奏的已保存节拍参数（无记录时保持现状） */
+  const applyAudioMeta = useCallback(
+    (absPath: string | null) => {
+      if (!absPath || !course.rootDir) return;
+      const meta = mediaMetaRef.current.audio[relativePathOf(course.rootDir, absPath)];
+      if (!meta) return;
+      metronome.updateOptions({ bpm: meta.bpm });
+      metronome.setSync({ firstBeatOffset: meta.firstBeatOffset });
+    },
+    [course.rootDir, metronome.updateOptions, metronome.setSync],
+  );
+  /** 供加载完成回调使用的最新引用（规避 effect 与 callback 的声明顺序依赖） */
+  const applyAudioMetaRef = useRef(applyAudioMeta);
+  applyAudioMetaRef.current = applyAudioMeta;
+
+  /**
+   * 工具栏参数更新入口：联动伴奏时的手动调整视为对该伴奏的校准，落盘保存
+   */
+  const updateMetronomeOptions = useCallback(
+    (patch: Partial<MetronomeOptions>) => {
+      metronome.updateOptions(patch);
+      if (patch.bpm !== undefined && metronome.sync.source === "audio") {
+        persistAudioMeta({ bpm: patch.bpm }, true);
+      }
+    },
+    [metronome.updateOptions, metronome.sync.source, persistAudioMeta],
+  );
+
+  /**
+   * 工具栏联动配置入口：手动调整首拍偏移同样落盘为该伴奏的校准值
+   */
+  const updateMetronomeSync = useCallback(
+    (patch: Partial<SyncConfig>) => {
+      metronome.setSync(patch);
+      if (patch.firstBeatOffset !== undefined && metronome.sync.source === "audio") {
+        persistAudioMeta({ firstBeatOffset: patch.firstBeatOffset }, true);
+      }
+    },
+    [metronome.setSync, metronome.sync.source, persistAudioMeta],
+  );
+
+  // 切换课节：停掉正在响的节拍器；无伴奏课节联动源退回不联动
+  useEffect(() => {
+    metronome.stop();
+    if (audioResources.length === 0 && metronome.sync.source !== "none") {
+      metronome.setSync({ source: "none" });
+    }
+    // 关键节点：仅课节切换时执行（关联资料引起的资源变化不应打断节拍器）
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [course.id, lessonIndex]);
+
+  /**
+   * 识别当前伴奏的 BPM 与首拍偏移，写入节拍器实现自动卡点；
+   * 结果按音频落盘，下次直接读取
    */
   const detectBpm = useCallback(async () => {
     const path = currentAudioPathRef.current;
@@ -154,13 +250,14 @@ export function ClassroomPage(props: ClassroomPageProps) {
       const { bpm, offset, octaveAdjusted } = await detectBpmFromFile(path);
       metronome.updateOptions({ bpm });
       metronome.setSync({ firstBeatOffset: offset });
+      persistAudioMeta({ bpm, firstBeatOffset: offset }, false);
       toast(`已识别伴奏：${bpm} BPM${octaveAdjusted ? "（已修正倍频）" : ""} · 首拍 ${offset}s`);
     } catch {
       toast("识别失败：节奏特征不明显或文件无法解码");
     } finally {
       setDetectingBpm(false);
     }
-  }, [detectingBpm, metronome.updateOptions, metronome.setSync]);
+  }, [detectingBpm, metronome.updateOptions, metronome.setSync, persistAudioMeta]);
 
   if (!lesson) {
     return (
@@ -247,6 +344,8 @@ export function ClassroomPage(props: ClassroomPageProps) {
           engineControl={audioControl}
           onActiveResourceChange={(path) => {
             currentAudioPathRef.current = path;
+            // 切换伴奏时应用其已保存的 BPM/首拍（识别或手动校准过的值）
+            applyAudioMeta(path);
           }}
         />
       </div>
@@ -257,12 +356,12 @@ export function ClassroomPage(props: ClassroomPageProps) {
           onToolChange={setTool}
           metronome={{
             options: metronome.options,
-            updateOptions: metronome.updateOptions,
+            updateOptions: updateMetronomeOptions,
             running: metronome.running,
             toggle: metronome.toggle,
             activeBeat: metronome.activeBeat,
             sync: metronome.sync,
-            setSync: metronome.setSync,
+            setSync: updateMetronomeSync,
             hasAudio: audioResources.length > 0,
             getMediaTime,
             detectingBpm,

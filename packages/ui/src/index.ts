@@ -11,6 +11,7 @@ export { Slider, type SliderProps } from "./components/slider";
 export { Select, type SelectOption, type SelectProps } from "./components/select";
 export { Checkbox, type CheckboxProps } from "./components/checkbox";
 export { Modal, type ModalProps } from "./components/dialog";
+export { NumberStepper, type NumberStepperProps } from "./components/number-stepper";
 export { ProgressBar, type ProgressBarProps } from "./components/progress";
 export { Tabs, type TabItem, type TabsProps } from "./components/tabs";
 export { EmptyState, type EmptyStateProps } from "./components/empty-state";

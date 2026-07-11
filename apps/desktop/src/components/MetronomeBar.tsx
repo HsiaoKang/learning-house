@@ -6,7 +6,7 @@
  */
 import { useState } from "react";
 import { motion } from "motion/react";
-import { Button, Checkbox, Select, Slider, cn } from "@learning-house/ui";
+import { Button, Checkbox, NumberStepper, Select, Slider, cn } from "@learning-house/ui";
 import type { MetronomeOptions } from "@learning-house/metronome-core";
 import type { SyncConfig, SyncSource } from "../hooks/useMetronome";
 import { TapTempoModal } from "./TapTempoModal";
@@ -79,13 +79,12 @@ export function MetronomeBar(props: MetronomeBarProps) {
         }}
       >
         <Slider min={20} max={300} value={options.bpm} onChange={(bpm) => updateOptions({ bpm })} aria-label="BPM" />
-        <input
-          type="number"
+        <NumberStepper
           min={20}
           max={300}
           value={options.bpm}
-          onChange={(e) => updateOptions({ bpm: clampBpm(Number(e.target.value)) })}
-          className="h-8 w-15 rounded-md border border-border bg-secondary text-center text-[13px] tabular-nums focus-visible:outline-2 focus-visible:outline-ring"
+          onChange={(bpm) => updateOptions({ bpm: clampBpm(bpm) })}
+          aria-label="BPM"
         />
         <span className="text-xs text-muted-foreground">BPM</span>
       </div>
@@ -133,14 +132,14 @@ export function MetronomeBar(props: MetronomeBarProps) {
         {sync.source !== "none" && (
           <>
             <span className="text-xs text-muted-foreground">首拍</span>
-            <input
-              type="number"
+            <NumberStepper
               min={0}
+              max={9999}
               step={0.1}
               value={sync.firstBeatOffset}
-              onChange={(e) => setSync({ firstBeatOffset: Math.max(0, Number(e.target.value) || 0) })}
+              onChange={(firstBeatOffset) => setSync({ firstBeatOffset })}
               title="媒体里第一拍出现的秒数"
-              className="h-8 w-16 rounded-md border border-border bg-secondary text-center text-[13px] tabular-nums focus-visible:outline-2 focus-visible:outline-ring"
+              aria-label="首拍偏移（秒）"
             />
             <Button variant="ghost" size="sm" onClick={captureOffsetFromMedia} title="把当前播放位置设为第一拍">
               取当前

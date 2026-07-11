@@ -1,8 +1,8 @@
 /**
  * 节拍器控制条
  *
- * 工具栏内的节拍器面板：启停、Tap 测速浮窗、BPM 调节（滑块 +
- * 数字输入 + 滚轮微调）、拍号、重音、音量、媒体联动与拍点指示灯。
+ * 工具栏内的节拍器面板：启停、Tap 测速浮窗、BPM 调节（步进输入 +
+ * 长按连发 + 滚轮微调）、拍号、重音、音量、媒体联动与拍点指示灯。
  */
 import { useState } from "react";
 import { motion } from "motion/react";
@@ -78,7 +78,6 @@ export function MetronomeBar(props: MetronomeBarProps) {
           updateOptions({ bpm: clampBpm(options.bpm + (e.deltaY < 0 ? 1 : -1)) });
         }}
       >
-        <Slider min={20} max={300} value={options.bpm} onChange={(bpm) => updateOptions({ bpm })} aria-label="BPM" />
         <NumberStepper
           min={20}
           max={300}

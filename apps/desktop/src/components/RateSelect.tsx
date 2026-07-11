@@ -29,7 +29,10 @@ export function RateSelect({ value, onChange, onDark }: RateSelectProps) {
       onChange={(v) => onChange(Number(v))}
       options={PLAYBACK_RATES.map((r) => ({ value: String(r), label: `${r}x` }))}
       title="播放倍速"
-      className={cn("h-7 px-2 text-xs", onDark && "border-white/25 bg-white/10 text-white hover:border-white/50")}
+      className={cn(
+        "h-7 border-transparent bg-transparent px-2 text-xs hover:bg-secondary",
+        onDark && "text-white hover:bg-white/15",
+      )}
     />
   );
 }

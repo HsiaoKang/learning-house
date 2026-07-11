@@ -27,11 +27,22 @@ export const Slider = forwardRef<ComponentRef<typeof SliderPrimitive.Root>, Slid
       ref={ref}
       value={[value]}
       onValueChange={(values) => onChange(values[0] ?? value)}
-      className={cn("relative flex w-35 touch-none select-none items-center py-1.5", className)}
+      className={cn(
+        "relative flex touch-none select-none items-center",
+        "data-[orientation=horizontal]:w-35 data-[orientation=horizontal]:py-1.5",
+        "data-[orientation=vertical]:h-24 data-[orientation=vertical]:w-auto data-[orientation=vertical]:flex-col data-[orientation=vertical]:px-1.5",
+        className,
+      )}
       {...props}
     >
-      <SliderPrimitive.Track className="relative h-1 w-full grow overflow-hidden rounded-full bg-secondary">
-        <SliderPrimitive.Range className="absolute h-full bg-primary" />
+      <SliderPrimitive.Track
+        className={cn(
+          "relative grow overflow-hidden rounded-full bg-secondary",
+          "data-[orientation=horizontal]:h-1 data-[orientation=horizontal]:w-full",
+          "data-[orientation=vertical]:h-full data-[orientation=vertical]:w-1",
+        )}
+      >
+        <SliderPrimitive.Range className="absolute bg-primary data-[orientation=horizontal]:h-full data-[orientation=vertical]:w-full" />
       </SliderPrimitive.Track>
       <SliderPrimitive.Thumb className="block size-3.5 rounded-full bg-primary transition-transform hover:scale-115 focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-1 disabled:pointer-events-none" />
     </SliderPrimitive.Root>

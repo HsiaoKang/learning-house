@@ -15,6 +15,7 @@ import { formatTime } from "../lib/format";
 import type { MediaEngineControl } from "../hooks/useMetronome";
 import type { LessonResource } from "../types";
 import { RateSelect } from "./RateSelect";
+import { VolumeControl } from "./VolumeControl";
 
 /** 续播位置保存节流间隔（毫秒） */
 const POSITION_SAVE_INTERVAL_MS = 3000;
@@ -63,6 +64,8 @@ export function VideoPlayer(props: VideoPlayerProps) {
   const [volume, setVolume] = useState(1);
   const [muted, setMuted] = useState(false);
   const [rate, setRate] = useState(1);
+  /** 音量变化信号（递增），驱动音量浮层的视觉反馈 */
+  const [volumeFlash, setVolumeFlash] = useState(0);
   /** 续播提示（恢复到的秒数），null 表示不显示 */
   const [resumeToast, setResumeToast] = useState<number | null>(null);
 
@@ -294,9 +297,10 @@ export function VideoPlayer(props: VideoPlayerProps) {
             onDurationChange={() => setDuration(videoRef.current?.duration ?? 0)}
             onVolumeChange={() => {
               const el = videoRef.current;
-              if (el) {
+              if (el && !coverHackRef.current) {
                 setVolume(el.volume);
                 setMuted(el.muted);
+                setVolumeFlash((n) => n + 1);
               }
             }}
             onPlay={() => {
@@ -384,33 +388,22 @@ export function VideoPlayer(props: VideoPlayerProps) {
               aria-label="播放进度"
             />
             <RateSelect onDark value={rate} onChange={(r) => videoRef.current && (videoRef.current.playbackRate = r)} />
-            <IconButton
-              name={muted || volume === 0 ? "volumeMute" : "volume"}
-              label={muted ? "取消静音" : "静音"}
-              size="sm"
-              className="text-white hover:bg-white/15 hover:text-white"
-              onClick={() => {
-                const el = videoRef.current;
-                if (el) {
-                  el.muted = !el.muted;
-                  setMuted(el.muted);
-                }
-              }}
-            />
-            <Slider
-              className="w-16"
-              min={0}
-              max={1}
-              step={0.05}
-              value={muted ? 0 : volume}
-              onChange={(v) => {
+            <VolumeControl
+              onDark
+              volume={volume}
+              muted={muted}
+              flashSignal={volumeFlash}
+              onVolumeChange={(v) => {
                 const el = videoRef.current;
                 if (el) {
                   el.volume = v;
                   el.muted = v === 0;
                 }
               }}
-              aria-label="音量"
+              onToggleMute={() => {
+                const el = videoRef.current;
+                if (el) el.muted = !el.muted;
+              }}
             />
             <IconButton
               name="fullscreen"

@@ -12,6 +12,7 @@ import { formatTime } from "../lib/format";
 import type { MediaEngineControl } from "../hooks/useMetronome";
 import type { LessonResource } from "../types";
 import { RateSelect } from "./RateSelect";
+import { VolumeControl } from "./VolumeControl";
 
 interface AudioPlayerBarProps {
   /** 当前课节的音频资源列表（非空时才渲染本组件） */
@@ -36,6 +37,9 @@ export function AudioPlayerBar(props: AudioPlayerBarProps) {
   const [rate, setRate] = useState(1);
   const [loop, setLoop] = useState(false);
   const [volume, setVolume] = useState(1);
+  const [muted, setMuted] = useState(false);
+  /** 音量变化信号（递增），驱动音量浮层的视觉反馈 */
+  const [volumeFlash, setVolumeFlash] = useState(0);
 
   // 课节切换时回到第一个音频
   useEffect(() => {
@@ -93,9 +97,11 @@ export function AudioPlayerBar(props: AudioPlayerBarProps) {
    * @param next 目标音量 0-1
    */
   const changeVolume = (next: number) => {
-    setVolume(next);
     const el = audioRef.current;
-    if (el) el.volume = next;
+    if (el) {
+      el.volume = next;
+      el.muted = next === 0;
+    }
   };
 
   if (!active) return null;
@@ -128,6 +134,14 @@ export function AudioPlayerBar(props: AudioPlayerBarProps) {
         onLoadedMetadata={() => {
           setDuration(audioRef.current?.duration ?? 0);
           if (audioRef.current) audioRef.current.playbackRate = rate;
+        }}
+        onVolumeChange={() => {
+          const el = audioRef.current;
+          if (el) {
+            setVolume(el.volume);
+            setMuted(el.muted);
+            setVolumeFlash((n) => n + 1);
+          }
         }}
       />
 
@@ -162,10 +176,16 @@ export function AudioPlayerBar(props: AudioPlayerBarProps) {
 
       <Checkbox checked={loop} onChange={setLoop} label="循环" title="播放到结尾自动从头循环" />
 
-      <div className="flex shrink-0 items-center gap-2">
-        <span className="text-xs text-muted-foreground">音量</span>
-        <Slider min={0} max={1} step={0.05} value={volume} onChange={changeVolume} className="w-[90px]" aria-label="音量" />
-      </div>
+      <VolumeControl
+        volume={volume}
+        muted={muted}
+        flashSignal={volumeFlash}
+        onVolumeChange={changeVolume}
+        onToggleMute={() => {
+          const el = audioRef.current;
+          if (el) el.muted = !el.muted;
+        }}
+      />
 
       {resources.length === 1 && (
         <span className="min-w-0 max-w-50 truncate text-xs text-muted-foreground" title={active.name}>

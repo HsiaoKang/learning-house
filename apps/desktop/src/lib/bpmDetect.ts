@@ -120,28 +120,120 @@ export function beatAlignmentScore(envelope: Float32Array, bpm: number, offsetSe
 }
 
 /**
- * 计算全曲单声道 RMS 包络（ENVELOPE_WIN_SEC 一格）
+ * 计算全曲起始检测函数（Onset Detection Function）
+ *
+ * 混音为单声道后走频谱通量：STFT 逐帧取对数幅度谱，
+ * 对各频点能量增量的正部求和。相比 RMS 响度包络，
+ * 它响应"新声音的出现"（含音高/音色变化），拨弦类素材的
+ * 拍点在通量域是尖锐脉冲，网格对齐信号远强于能量域。
  *
  * @param buffer 解码后的音频
- * @returns 包络数组
+ * @returns ODF 序列（ENVELOPE_WIN_SEC 一格）
  */
 function computeEnvelope(buffer: AudioBuffer): Float32Array {
-  const win = Math.max(1, Math.round(buffer.sampleRate * ENVELOPE_WIN_SEC));
-  const frames = Math.floor(buffer.length / win);
-  const envelope = new Float32Array(frames);
+  const mono = new Float32Array(buffer.length);
   for (let ch = 0; ch < buffer.numberOfChannels; ch++) {
     const data = buffer.getChannelData(ch);
-    for (let f = 0; f < frames; f++) {
-      let sum = 0;
-      const start = f * win;
-      for (let i = start; i < start + win; i++) sum += data[i] * data[i];
-      envelope[f] += sum;
+    for (let i = 0; i < mono.length; i++) mono[i] += data[i];
+  }
+  if (buffer.numberOfChannels > 1) {
+    for (let i = 0; i < mono.length; i++) mono[i] /= buffer.numberOfChannels;
+  }
+  return computeOnsetEnvelope(mono, buffer.sampleRate);
+}
+
+/** STFT 帧长（2 的幂；44.1kHz 下约 23ms，频率分辨率约 43Hz） */
+const FFT_FRAME = 1024;
+
+/**
+ * 从单声道样本计算频谱通量 ODF（导出供离线诊断/回归共用同一实现）
+ *
+ * @param samples 单声道样本
+ * @param sampleRate 采样率
+ * @returns ODF 序列（ENVELOPE_WIN_SEC 一格）
+ */
+export function computeOnsetEnvelope(samples: Float32Array, sampleRate: number): Float32Array {
+  const hop = Math.max(1, Math.round(sampleRate * ENVELOPE_WIN_SEC));
+  const frames = Math.max(0, Math.floor((samples.length - FFT_FRAME) / hop) + 1);
+  const odf = new Float32Array(frames);
+  if (frames === 0) return odf;
+
+  // 汉宁窗（预计算）
+  const window = new Float32Array(FFT_FRAME);
+  for (let i = 0; i < FFT_FRAME; i++) {
+    window[i] = 0.5 - 0.5 * Math.cos((2 * Math.PI * i) / (FFT_FRAME - 1));
+  }
+
+  const re = new Float32Array(FFT_FRAME);
+  const im = new Float32Array(FFT_FRAME);
+  const bins = FFT_FRAME / 2;
+  const prevMag = new Float32Array(bins);
+
+  for (let f = 0; f < frames; f++) {
+    const start = f * hop;
+    for (let i = 0; i < FFT_FRAME; i++) {
+      re[i] = samples[start + i] * window[i];
+      im[i] = 0;
+    }
+    fftInPlace(re, im);
+    let flux = 0;
+    for (let k = 1; k < bins; k++) {
+      const mag = Math.log1p(Math.hypot(re[k], im[k]));
+      const diff = mag - prevMag[k];
+      if (diff > 0) flux += diff;
+      prevMag[k] = mag;
+    }
+    // 首帧无前帧可比，置 0 避免开头伪 onset
+    odf[f] = f === 0 ? 0 : flux;
+  }
+  return odf;
+}
+
+/**
+ * 原地 radix-2 快速傅里叶变换（长度必须为 2 的幂）
+ *
+ * @param re 实部（原地修改）
+ * @param im 虚部（原地修改）
+ */
+function fftInPlace(re: Float32Array, im: Float32Array): void {
+  const n = re.length;
+  // 位反转重排
+  for (let i = 1, j = 0; i < n; i++) {
+    let bit = n >> 1;
+    for (; j & bit; bit >>= 1) j ^= bit;
+    j ^= bit;
+    if (i < j) {
+      const tr = re[i];
+      re[i] = re[j];
+      re[j] = tr;
+      const ti = im[i];
+      im[i] = im[j];
+      im[j] = ti;
     }
   }
-  for (let f = 0; f < frames; f++) {
-    envelope[f] = Math.sqrt(envelope[f] / (win * buffer.numberOfChannels));
+  // 蝶形运算
+  for (let len = 2; len <= n; len <<= 1) {
+    const ang = (-2 * Math.PI) / len;
+    const wRe = Math.cos(ang);
+    const wIm = Math.sin(ang);
+    for (let i = 0; i < n; i += len) {
+      let curRe = 1;
+      let curIm = 0;
+      for (let j = 0; j < len / 2; j++) {
+        const aRe = re[i + j];
+        const aIm = im[i + j];
+        const bRe = re[i + j + len / 2] * curRe - im[i + j + len / 2] * curIm;
+        const bIm = re[i + j + len / 2] * curIm + im[i + j + len / 2] * curRe;
+        re[i + j] = aRe + bRe;
+        im[i + j] = aIm + bIm;
+        re[i + j + len / 2] = aRe - bRe;
+        im[i + j + len / 2] = aIm - bIm;
+        const nextRe = curRe * wRe - curIm * wIm;
+        curIm = curRe * wIm + curIm * wRe;
+        curRe = nextRe;
+      }
+    }
   }
-  return envelope;
 }
 
 /**
@@ -197,37 +289,44 @@ function priorDistance(bpm: number): number {
 }
 
 /**
- * 全相位搜索对齐拍网格（以偶数拍能量最大化把强拍放在偶位），
- * 并给出倍频判别所需的结构比值
+ * 全相位搜索对齐拍网格，并给出倍频判别所需的结构比值。
+ * 关键节点：搜索目标就是最终验收指标（拍点/反拍对比度），
+ * 保证选出的相位在对齐度上全局最优——搜索与验收目标一致，
+ * 避免"强拍能量最大"与"拍点踩峰"在复杂音型上选出不同相位
  *
  * @param envelope 全曲包络
  * @param periodSteps 拍间隔（包络格数，可为小数）
- * @returns phaseStep 强拍相位（格）；oddRatio 奇拍/偶拍能量比；
+ * @returns phaseStep 最优相位(格)；oddRatio 弱/强拍能量比（period*2 网格）；
  *          offbeatRatio 反拍/拍点能量比
  */
 function alignPhase(
   envelope: Float32Array,
   periodSteps: number,
 ): { phaseStep: number; oddRatio: number; offbeatRatio: number } {
-  // 关键节点：搜索范围取两个拍长，覆盖强拍落在奇位的情况
-  const phaseCount = Math.max(1, Math.floor(periodSteps * 2));
+  const phaseCount = Math.max(1, Math.floor(periodSteps));
   let bestPhase = 0;
-  let bestEven = -Infinity;
+  let bestContrast = -Infinity;
+  let bestOn = -Infinity;
   for (let phase = 0; phase < phaseCount; phase++) {
-    const even = meanBeatEnergy(envelope, phase, periodSteps * 2);
-    if (even > bestEven) {
-      bestEven = even;
+    const on = meanBeatEnergy(envelope, phase, periodSteps);
+    const off = meanBeatEnergy(envelope, phase + periodSteps / 2, periodSteps);
+    const contrast = on - off;
+    // 对比度为主；同强音型下各相位对比度同为 0，用拍点能量决胜
+    if (contrast > bestContrast + 1e-9 || (Math.abs(contrast - bestContrast) <= 1e-9 && on > bestOn)) {
+      bestContrast = contrast;
+      bestOn = on;
       bestPhase = phase;
     }
   }
 
-  const even = meanBeatEnergy(envelope, bestPhase, periodSteps * 2);
-  const odd = meanBeatEnergy(envelope, bestPhase + periodSteps, periodSteps * 2);
+  // 倍频判别信号：在 period*2 网格上比较相邻两拍强弱（强者视为强拍）
+  const beatA = meanBeatEnergy(envelope, bestPhase, periodSteps * 2);
+  const beatB = meanBeatEnergy(envelope, bestPhase + periodSteps, periodSteps * 2);
   const onBeat = meanBeatEnergy(envelope, bestPhase, periodSteps);
   const offBeat = meanBeatEnergy(envelope, bestPhase + periodSteps / 2, periodSteps);
   return {
     phaseStep: bestPhase,
-    oddRatio: odd / (even + 1e-9),
+    oddRatio: Math.min(beatA, beatB) / (Math.max(beatA, beatB) + 1e-9),
     offbeatRatio: offBeat / (onBeat + 1e-9),
   };
 }

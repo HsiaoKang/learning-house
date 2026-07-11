@@ -9,31 +9,28 @@
  *      pnpm dlx tsx scripts/diag-bpm.ts /tmp/xx.pcm <库粗估BPM>
  */
 import fs from "node:fs";
-import { analyzeEnvelope, beatAlignmentScore } from "../apps/desktop/src/lib/bpmDetect";
+import { analyzeEnvelope, beatAlignmentScore, computeOnsetEnvelope } from "../apps/desktop/src/lib/bpmDetect";
 
 const SAMPLE_RATE = 44100;
 const WIN_SEC = 0.01;
 
-const [pcmPath, rawBpmArg] = process.argv.slice(2);
+const [pcmPath, rawBpmArg, headSecArg] = process.argv.slice(2);
 if (!pcmPath || !rawBpmArg) {
-  console.error("用法: tsx scripts/diag-bpm.ts <pcm文件> <库粗估BPM>");
+  console.error("用法: tsx scripts/diag-bpm.ts <pcm文件> <库粗估BPM> [仅分析前N秒]");
   process.exit(1);
 }
 const rawBpm = Number(rawBpmArg);
+const headSec = headSecArg ? Number(headSecArg) : null;
 
 const buf = fs.readFileSync(pcmPath);
-const samples = new Float32Array(buf.buffer, buf.byteOffset, Math.floor(buf.byteLength / 4));
-
-// RMS 包络（与 bpmDetect.computeEnvelope 相同参数）
-const win = Math.round(SAMPLE_RATE * WIN_SEC);
-const frames = Math.floor(samples.length / win);
-const envelope = new Float32Array(frames);
-for (let f = 0; f < frames; f++) {
-  let sum = 0;
-  for (let i = f * win; i < (f + 1) * win; i++) sum += samples[i] * samples[i];
-  envelope[f] = Math.sqrt(sum / win);
+let samples = new Float32Array(buf.buffer, buf.byteOffset, Math.floor(buf.byteLength / 4));
+if (headSec) {
+  samples = samples.subarray(0, Math.min(samples.length, Math.round(headSec * SAMPLE_RATE)));
 }
-console.log(`时长 ${(frames * WIN_SEC).toFixed(1)}s，包络 ${frames} 格`);
+
+// 频谱通量 ODF（与线上 detectBpmFromFile 完全同一实现）
+const envelope = computeOnsetEnvelope(samples, SAMPLE_RATE);
+console.log(`时长 ${(envelope.length * WIN_SEC).toFixed(1)}s，ODF ${envelope.length} 格`);
 
 /**
  * 打印某个候选 BPM 的判别信号（复制 bpmDetect.alignPhase 的口径）

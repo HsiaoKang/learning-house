@@ -75,6 +75,13 @@ export function VideoPlayer(props: VideoPlayerProps) {
   const coverCleanupRef = useRef<(() => void) | null>(null);
   /** 全屏态（Tauri 窗口全屏 + 视频容器应用内铺满） */
   const [fullscreen, setFullscreen] = useState(false);
+  /** 进入视频全屏前窗口是否已被用户全屏（退出时据此决定是否还原窗口） */
+  const wasWindowFullscreenRef = useRef(false);
+  /** 控制层可见性（鼠标空闲自动渐隐） */
+  const [controlsVisible, setControlsVisible] = useState(true);
+  const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** 鼠标悬停在控制栏上（悬停期间不自动隐藏） */
+  const hoveringControlsRef = useRef(false);
 
   // 课节切换（资源列表变化）时回到第一个视频并复位控制层
   useEffect(() => {
@@ -100,8 +107,36 @@ export function VideoPlayer(props: VideoPlayerProps) {
     return () => clearTimeout(timer);
   }, [resumeToast]);
 
-  // 组件卸载时终止封面流程
-  useEffect(() => () => coverCleanupRef.current?.(), []);
+  // 组件卸载时终止封面流程与隐藏计时器
+  useEffect(
+    () => () => {
+      coverCleanupRef.current?.();
+      if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+    },
+    [],
+  );
+
+  /**
+   * 排一次控制层自动隐藏（2.5 秒空闲；悬停控制栏时顺延）
+   */
+  const scheduleHide = useCallback(() => {
+    if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+    hideTimerRef.current = setTimeout(() => {
+      if (hoveringControlsRef.current) {
+        scheduleHide();
+        return;
+      }
+      setControlsVisible(false);
+    }, 2500);
+  }, []);
+
+  /**
+   * 显示控制层并重排空闲隐藏计时
+   */
+  const showControls = useCallback(() => {
+    setControlsVisible(true);
+    scheduleHide();
+  }, [scheduleHide]);
 
   /**
    * 读取视频元素当前进度并执行回调（元素不存在时忽略）
@@ -195,29 +230,33 @@ export function VideoPlayer(props: VideoPlayerProps) {
   };
 
   /**
-   * 进入/退出全屏。
+   * 进入/退出视频全屏。
    * 关键节点：WKWebView 默认禁用元素全屏 API，改用 Tauri 窗口级全屏
-   * （占满整个显示器）+ 视频容器应用内铺满的组合；浏览器环境降级为元素全屏
+   * （占满整个显示器）+ 视频容器应用内铺满的组合；以"视频全屏态"为准，
+   * 窗口若已被用户全屏则保持不动，退出时只还原我们自己开启的窗口全屏
    */
   const toggleFullscreen = useCallback(async () => {
+    const next = !fullscreen;
     if (IS_TAURI) {
       const { getCurrentWindow } = await import("@tauri-apps/api/window");
       const win = getCurrentWindow();
-      const next = !(await win.isFullscreen());
-      await win.setFullscreen(next);
-      setFullscreen(next);
-      return;
-    }
-    const container = containerRef.current;
-    if (!container) return;
-    if (document.fullscreenElement) {
-      void document.exitFullscreen();
-      setFullscreen(false);
+      if (next) {
+        wasWindowFullscreenRef.current = await win.isFullscreen();
+        if (!wasWindowFullscreenRef.current) {
+          await win.setFullscreen(true);
+        }
+      } else if (!wasWindowFullscreenRef.current) {
+        await win.setFullscreen(false);
+      }
     } else {
-      void container.requestFullscreen();
-      setFullscreen(true);
+      const container = containerRef.current;
+      if (container) {
+        if (next) void container.requestFullscreen();
+        else if (document.fullscreenElement) void document.exitFullscreen();
+      }
     }
-  }, []);
+    setFullscreen(next);
+  }, [fullscreen]);
 
   // 全屏时 Esc 退出
   useEffect(() => {
@@ -279,9 +318,15 @@ export function VideoPlayer(props: VideoPlayerProps) {
       <ContextMenu items={VIDEO_MENU_ITEMS} onSelect={handleMenu}>
         <div
           ref={containerRef}
+          onMouseMove={showControls}
+          onMouseLeave={() => {
+            if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+            setControlsVisible(false);
+          }}
           className={cn(
             "group relative flex min-h-0 flex-1 flex-col bg-stage",
             fullscreen && "fixed inset-0 z-50",
+            !controlsVisible && "cursor-none",
           )}
         >
           <video
@@ -307,11 +352,13 @@ export function VideoPlayer(props: VideoPlayerProps) {
               if (coverHackRef.current) return;
               setPlaying(true);
               setResumeToast(null);
+              showControls();
               withVideo(engineControl.startSynced);
             }}
             onPause={() => {
               if (coverHackRef.current) return;
               setPlaying(false);
+              showControls();
               engineControl.stopFromMedia();
               // 暂停时立即落一次续播位置
               const el = videoRef.current;
@@ -346,22 +393,27 @@ export function VideoPlayer(props: VideoPlayerProps) {
             )}
           </AnimatePresence>
 
-          {/* 暂停态中央播放键 */}
+          {/* 暂停态中央播放键（随控制层空闲渐隐） */}
           {!playing && (
             <button
               onClick={togglePlay}
               aria-label="播放"
-              className="absolute left-1/2 top-1/2 flex size-14 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-black/55 text-white backdrop-blur transition-transform hover:scale-110"
+              className={cn(
+                "absolute left-1/2 top-1/2 flex size-14 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-black/55 text-white backdrop-blur transition-[opacity,transform] duration-300 hover:scale-110",
+                !controlsVisible && "pointer-events-none opacity-0",
+              )}
             >
               <Icon name="play" size="lg" />
             </button>
           )}
 
-          {/* 自绘控制栏：暂停常显，播放中 hover 显示 */}
+          {/* 自绘控制栏：鼠标空闲 2.5s 渐隐，移动即现 */}
           <div
+            onMouseEnter={() => (hoveringControlsRef.current = true)}
+            onMouseLeave={() => (hoveringControlsRef.current = false)}
             className={cn(
-              "absolute inset-x-0 bottom-0 flex items-center gap-2.5 bg-gradient-to-t from-black/80 to-transparent px-3 pb-2 pt-6 text-white transition-opacity",
-              playing && "opacity-0 group-hover:opacity-100",
+              "absolute inset-x-0 bottom-0 flex items-center gap-2.5 bg-gradient-to-t from-black/80 to-transparent px-3 pb-2 pt-6 text-white transition-opacity duration-300",
+              !controlsVisible && "pointer-events-none opacity-0",
             )}
           >
             <IconButton

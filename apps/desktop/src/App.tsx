@@ -21,6 +21,7 @@ import {
   writeManifest,
 } from "./lib/scanner";
 import { showConfirm, showMessage } from "./lib/dialogs";
+import { IS_TAURI } from "./lib/platform";
 import { runStartupUpdateCheck } from "./lib/updater";
 import { buildOrganizePrompt } from "./lib/aiPrompt";
 import { loadCourseProgress, saveCourseProgress, type CourseProgress } from "./lib/progress";
@@ -115,6 +116,28 @@ function App() {
   useEffect(() => {
     document.documentElement.classList.toggle("dark", resolvedTheme === "dark");
   }, [resolvedTheme]);
+
+  // 原生标题栏跟随应用主题（system 时传 null 交还系统控制），保持窗口装饰与内容一致
+  useEffect(() => {
+    if (!IS_TAURI) return;
+    void (async () => {
+      const { getCurrentWindow } = await import("@tauri-apps/api/window");
+      await getCurrentWindow().setTheme(settings.theme === "system" ? null : settings.theme);
+    })().catch(() => undefined);
+  }, [settings.theme]);
+
+  const activeCourse = courses.find((c) => c.id === activeCourseId) ?? null;
+  const managingCourse = courses.find((c) => c.id === managingCourseId) ?? null;
+
+  // 窗口标题：打开课程后显示课程名，回到课程库恢复应用名
+  useEffect(() => {
+    if (!IS_TAURI) return;
+    const title = activeCourse?.name ?? managingCourse?.name ?? "Learning House";
+    void (async () => {
+      const { getCurrentWindow } = await import("@tauri-apps/api/window");
+      await getCurrentWindow().setTitle(title);
+    })().catch(() => undefined);
+  }, [activeCourse?.name, managingCourse?.name]);
 
   // 生产环境屏蔽 WebView 原生右键菜单（视频区有自定义菜单；开发保留以便审查元素）
   useEffect(() => {
@@ -439,9 +462,6 @@ function App() {
       onClick={() => updateSettings({ theme: THEME_CYCLE[settings.theme] })}
     />
   );
-
-  const activeCourse = courses.find((c) => c.id === activeCourseId) ?? null;
-  const managingCourse = courses.find((c) => c.id === managingCourseId) ?? null;
 
   return (
     <>

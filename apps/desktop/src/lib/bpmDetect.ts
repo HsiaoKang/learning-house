@@ -167,8 +167,21 @@ export function snapTapToGrid(path: string, tapBpm: number): { bpm: number; offs
   if (!lastAnalysis || lastAnalysis.path !== path) return null;
   const snapped = snapBpmToRatios(lastAnalysis.rawBpm, tapBpm);
   if (snapped === null) return null;
-  const aligned = alignPhaseForBpm(lastAnalysis.envelope, snapped);
-  return { bpm: snapped, offset: Math.max(0, +aligned.toFixed(2)) };
+  return alignToBpm(path, snapped);
+}
+
+/**
+ * 用给定的权威拍速（谱面标注等可信来源）在伴奏上做相位搜索定位首拍。
+ * 与 TAP 吸附的区别：拍速本身可信，不做比率吸附
+ *
+ * @param path 伴奏文件绝对路径（需已做过识别，复用其分析产物）
+ * @param bpm 权威拍速
+ * @returns 该拍速下的首拍定位；伴奏未识别过时返回 null
+ */
+export function alignToBpm(path: string, bpm: number): { bpm: number; offset: number } | null {
+  if (!lastAnalysis || lastAnalysis.path !== path) return null;
+  const aligned = alignPhaseForBpm(lastAnalysis.envelope, bpm);
+  return { bpm, offset: Math.max(0, +aligned.toFixed(2)) };
 }
 
 /**

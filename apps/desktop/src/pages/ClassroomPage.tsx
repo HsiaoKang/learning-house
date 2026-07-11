@@ -14,7 +14,8 @@ import { AudioPlayerBar } from "../components/AudioPlayerBar";
 import { DocViewer } from "../components/DocViewer";
 import { ResourcePicker } from "../components/ResourcePicker";
 import { ToolBar } from "../components/ToolBar";
-import { detectBpmFromFile, snapTapToGrid } from "../lib/bpmDetect";
+import { alignToBpm, detectBpmFromFile, snapTapToGrid } from "../lib/bpmDetect";
+import { bpmFromScorePdf } from "../lib/scoreBpm";
 import { loadMediaMeta, saveMediaMeta, type AudioBeatMeta, type CourseMediaMeta } from "../lib/mediaMeta";
 import { useMetronome, type SyncConfig } from "../hooks/useMetronome";
 import { useMediaShortcuts, type ShortcutTarget } from "../hooks/useMediaShortcuts";
@@ -257,25 +258,43 @@ export function ClassroomPage(props: ClassroomPageProps) {
 
   /**
    * 识别当前伴奏的 BPM 与首拍偏移，写入节拍器实现自动卡点；
-   * 结果按音频落盘，下次直接读取
+   * 结果按音频落盘，下次直接读取。
+   * 可信度：文件名标注 > 本课节谱面标注 > 声学估计——
+   * 声学结果会被课节内 PDF 谱的「= N」速度标注覆盖
+   * （伴奏律动与谱面拍速非倍频关系时，声学不可判定，谱面是权威真值）
    */
   const detectBpm = useCallback(async () => {
     const path = currentAudioPathRef.current;
     if (!path || detectingBpm) return;
     setDetectingBpm(true);
     try {
-      const { bpm, offset, octaveAdjusted, fromFilename } = await detectBpmFromFile(path);
-      metronome.updateOptions({ bpm });
-      metronome.setSync({ firstBeatOffset: offset });
-      persistAudioMeta({ bpm, firstBeatOffset: offset }, false);
-      const source = fromFilename ? "（文件名标注）" : octaveAdjusted ? "（已修正倍频）" : "";
-      toast(`已识别伴奏：${bpm} BPM${source} · 首拍 ${offset}s，不准可用 TAP 拍击校正`);
+      const detected = await detectBpmFromFile(path);
+      let final = { bpm: detected.bpm, offset: detected.offset };
+      let source = detected.fromFilename ? "（文件名标注）" : detected.octaveAdjusted ? "（已修正倍频）" : "";
+      if (!detected.fromFilename) {
+        // 关键节点：查本课节谱面的速度标注，命中则以谱面为准重新定位首拍
+        for (const res of lesson?.resources ?? []) {
+          if (res.kind !== "pdf") continue;
+          const scoreBpm = await bpmFromScorePdf(res.path).catch(() => null);
+          if (scoreBpm !== null) {
+            if (scoreBpm !== detected.bpm) {
+              final = alignToBpm(path, scoreBpm) ?? { bpm: scoreBpm, offset: detected.offset };
+            }
+            source = "（谱面标注）";
+            break;
+          }
+        }
+      }
+      metronome.updateOptions({ bpm: final.bpm });
+      metronome.setSync({ firstBeatOffset: final.offset });
+      persistAudioMeta({ bpm: final.bpm, firstBeatOffset: final.offset }, false);
+      toast(`已识别伴奏：${final.bpm} BPM${source} · 首拍 ${final.offset}s，不准可用 TAP 拍击校正`);
     } catch {
       toast("识别失败：节奏特征不明显或文件无法解码");
     } finally {
       setDetectingBpm(false);
     }
-  }, [detectingBpm, metronome.updateOptions, metronome.setSync, persistAudioMeta]);
+  }, [detectingBpm, lesson, metronome.updateOptions, metronome.setSync, persistAudioMeta]);
   detectBpmRef.current = detectBpm;
 
   /**

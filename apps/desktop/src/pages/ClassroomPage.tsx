@@ -364,8 +364,13 @@ export function ClassroomPage(props: ClassroomPageProps) {
           audioRef={audioRef}
           engineControl={audioControl}
           onActiveResourceChange={(path) => {
+            // 关键节点：伴奏是节拍器联动的依赖，换伴奏先停节拍器
+            // （旧 audio 元素直接销毁不发 pause 事件，联动不会自行停止）
+            if (currentAudioPathRef.current !== path) {
+              metronome.stop();
+            }
             currentAudioPathRef.current = path;
-            // 切换伴奏时应用其已保存的 BPM/首拍（识别或手动校准过的值）
+            // 应用新伴奏已保存的 BPM/首拍（识别或手动校准过的值）
             applyAudioMeta(path);
           }}
         />

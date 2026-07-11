@@ -107,6 +107,15 @@ export function VideoPlayer(props: VideoPlayerProps) {
     return () => clearTimeout(timer);
   }, [resumeToast]);
 
+  // 快捷键音量调整的反馈信号（自定义事件；程序性 volumechange 不触发浮层）
+  useEffect(() => {
+    const el = videoRef.current;
+    if (!el) return;
+    const onFlash = () => setVolumeFlash((n) => n + 1);
+    el.addEventListener("app:volumeflash", onFlash);
+    return () => el.removeEventListener("app:volumeflash", onFlash);
+  }, [videoRef, active?.path]);
+
   // 组件卸载时终止封面流程与隐藏计时器
   useEffect(
     () => () => {
@@ -345,7 +354,6 @@ export function VideoPlayer(props: VideoPlayerProps) {
               if (el && !coverHackRef.current) {
                 setVolume(el.volume);
                 setMuted(el.muted);
-                setVolumeFlash((n) => n + 1);
               }
             }}
             onPlay={() => {

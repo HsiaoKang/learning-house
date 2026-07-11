@@ -7,10 +7,23 @@
  */
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { IconButton, Slider, cn } from "@learning-house/ui";
+import { IconButton, Slider, cn, type IconName } from "@learning-house/ui";
 
 /** 快捷键触发的浮层显示时长（毫秒） */
 const FLASH_MS = 1200;
+
+/**
+ * 按音量档位选择图标：静音 X / 小音量无波 / 中音量一道波 / 大音量两道波
+ *
+ * @param volume 当前音量 0-1
+ * @param muted 是否静音
+ */
+function volumeIconOf(volume: number, muted: boolean): IconName {
+  if (muted || volume === 0) return "volumeMute";
+  if (volume < 1 / 3) return "volumeLow";
+  if (volume < 2 / 3) return "volumeMid";
+  return "volume";
+}
 
 interface VolumeControlProps {
   /** 当前音量 0-1 */
@@ -59,7 +72,7 @@ export function VolumeControl(props: VolumeControlProps) {
       onMouseLeave={() => setHovering(false)}
     >
       <IconButton
-        name={muted || volume === 0 ? "volumeMute" : "volume"}
+        name={volumeIconOf(volume, muted)}
         label={muted ? "取消静音" : "静音"}
         size="sm"
         className={cn(onDark && "text-white hover:bg-white/15 hover:text-white")}

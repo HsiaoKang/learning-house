@@ -59,17 +59,16 @@ export function useMediaShortcuts(mediaRef: RefObject<HTMLVideoElement | HTMLAud
           media.currentTime = Math.min(media.duration || Infinity, media.currentTime + SEEK_STEP_SEC);
           break;
         case "ArrowUp": {
-          const before = media.volume;
           media.muted = false;
-          media.volume = Math.min(1, before + VOLUME_STEP);
-          // 关键节点：已在边界时值不变、原生不发事件，手动补发保证操作有反馈
-          if (media.volume === before) media.dispatchEvent(new Event("volumechange"));
+          media.volume = Math.min(1, media.volume + VOLUME_STEP);
+          // 关键节点：快捷键专属反馈信号（含已到边界的情况），
+          // 与程序性 volumechange 区分，避免切页/初始化时浮层误闪
+          media.dispatchEvent(new CustomEvent("app:volumeflash"));
           break;
         }
         case "ArrowDown": {
-          const before = media.volume;
-          media.volume = Math.max(0, before - VOLUME_STEP);
-          if (media.volume === before) media.dispatchEvent(new Event("volumechange"));
+          media.volume = Math.max(0, media.volume - VOLUME_STEP);
+          media.dispatchEvent(new CustomEvent("app:volumeflash"));
           break;
         }
       }

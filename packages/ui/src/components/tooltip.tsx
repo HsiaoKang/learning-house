@@ -17,11 +17,19 @@ const SKIP_DELAY_MS = 800;
 /**
  * Tooltip 全局 Provider（挂应用根部一次，skip delay 才能跨组件生效）
  *
+ * disableHoverableContent：提示气泡本身不参与悬停保持。否则鼠标快速
+ * 划向相邻按钮时若扫过气泡，旧提示会被"悬停"锁住不关闭，
+ * 新目标的提示被互斥挡下，表现为"提示内容没有切换"。
+ *
  * @param props children 应用内容
  */
 export function TooltipProvider({ children }: { children: ReactNode }) {
   return (
-    <TooltipPrimitive.Provider delayDuration={SHOW_DELAY_MS} skipDelayDuration={SKIP_DELAY_MS}>
+    <TooltipPrimitive.Provider
+      delayDuration={SHOW_DELAY_MS}
+      skipDelayDuration={SKIP_DELAY_MS}
+      disableHoverableContent
+    >
       {children}
     </TooltipPrimitive.Provider>
   );

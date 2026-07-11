@@ -34,6 +34,8 @@ import {
   Sun,
   Trash2,
   Video,
+  Volume,
+  Volume1,
   Volume2,
   VolumeX,
   X,
@@ -72,6 +74,8 @@ const ICONS = {
   trash: Trash2,
   video: Video,
   volume: Volume2,
+  volumeLow: Volume,
+  volumeMid: Volume1,
   volumeMute: VolumeX,
 } satisfies Record<string, LucideIcon>;
 

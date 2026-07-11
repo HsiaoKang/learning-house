@@ -50,6 +50,15 @@ export function AudioPlayerBar(props: AudioPlayerBarProps) {
 
   const active = resources[Math.min(activeIndex, resources.length - 1)] ?? null;
 
+  // 快捷键音量调整的反馈信号（自定义事件；程序性 volumechange 不触发浮层）
+  useEffect(() => {
+    const el = audioRef.current;
+    if (!el) return;
+    const onFlash = () => setVolumeFlash((n) => n + 1);
+    el.addEventListener("app:volumeflash", onFlash);
+    return () => el.removeEventListener("app:volumeflash", onFlash);
+  }, [audioRef, active?.path]);
+
   /**
    * 读取音频元素当前进度并执行回调（元素不存在时忽略）
    *
@@ -140,7 +149,6 @@ export function AudioPlayerBar(props: AudioPlayerBarProps) {
           if (el) {
             setVolume(el.volume);
             setMuted(el.muted);
-            setVolumeFlash((n) => n + 1);
           }
         }}
       />

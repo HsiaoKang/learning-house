@@ -123,14 +123,15 @@ Want something? Vote or propose it in [Discussions](https://github.com/HsiaoKang
 **code PRs are not accepted for now** (to keep iteration speed and licensing flexibility).
 Open a Discussion first if you'd like to get involved.
 
-Build it yourself (toolchain versions auto-installed by [mise](https://mise.jdx.dev/)):
+Build it yourself (toolchain and tasks are both managed by [mise](https://mise.jdx.dev/)):
 
 ```bash
-mise install        # toolchain
-pnpm install        # dependencies
-pnpm dev            # dev mode (Vite + Tauri)
-pnpm build          # build installers
-pnpm -r typecheck   # typecheck all packages
+mise install         # toolchain
+pnpm install         # dependencies
+mise run dev         # dev mode (Vite + Tauri)
+mise run build       # build installers
+mise run typecheck   # typecheck all packages
+mise tasks           # list all tasks (incl. offline regression tools)
 ```
 
 Releases: commits follow [Conventional Commits](https://www.conventionalcommits.org/);
